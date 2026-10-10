@@ -1,1679 +1,1128 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>RTEC GTW Job Builder</title>
 
-<meta name="theme-color" content="#1A73E8">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="GTW Builder">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<meta name="apple-mobile-web-app-title" content="GTW Job Builder">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1A73E8">
+<link rel="icon" id="faviconLink">
+<link rel="apple-touch-icon" id="appleTouchIconLink">
+<link rel="manifest" id="manifestLink">
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
-    darkMode: 'class',
-    theme: {
-      extend: {
-        colors: {
-          brand: {
-            50: '#EAF1FB', 100: '#D2E3FC', 200: '#AECBFA', 300: '#8AB4F8',
-            400: '#669DF6', 500: '#4285F4', 600: '#1A73E8', 700: '#15294A',
-            800: '#122A46', 900: '#0B1220'
-          }
-        }
-      }
-    }
+    theme: { extend: { colors: { brand: { DEFAULT: '#1A73E8', dark: '#0E5BC4', light: '#E8F0FE' } } } }
   };
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <style>
-  html, body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; }
-  body { background: #F3F6FB; color: #0B1220; padding-bottom: env(safe-area-inset-bottom); }
-  html.dark body { background: #0B1220; color: #EAF1FB; }
-  .safe-top { padding-top: env(safe-area-inset-top); }
-  .tap { min-height: 52px; }
-  input, select, textarea {
-    font-size: 16px; /* prevents iOS auto-zoom on focus */
-  }
-  input[type="range"] { -webkit-appearance: none; height: 6px; border-radius: 4px; background: #AECBFA; }
-  input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%;
-    background: #1A73E8; border: 3px solid white; box-shadow: 0 1px 3px rgba(0,0,0,.4);
-  }
-  html.dark input[type="range"] { background: #15294A; }
-  html.dark input[type="range"]::-webkit-slider-thumb { background: #669DF6; border-color: #0B1220; }
-  #markupCanvas { touch-action: none; background: #000; display: block; }
-  #markupViewport { touch-action: none; }
-  .field-label { font-weight: 600; font-size: 0.8rem; letter-spacing: .02em; text-transform: uppercase; opacity: .7; }
-  .field-input {
-    width: 100%; border-radius: 0.75rem; border: 2px solid #CFE0FB; background: white;
-    padding: 0.85rem 1rem; color: #0B1220;
-  }
-  html.dark .field-input { background: #15294A; border-color: #28406B; color: #EAF1FB; }
-  .field-input:focus { outline: none; border-color: #1A73E8; box-shadow: 0 0 0 3px rgba(26,115,232,.25); }
-  .btn-primary {
-    background: #1A73E8; color: white; font-weight: 700; border-radius: 1rem;
-    padding: 1rem 1.25rem; box-shadow: 0 2px 8px rgba(11,18,32,.25);
-  }
-  .btn-primary:active { transform: scale(0.98); }
-  .btn-primary:disabled { opacity: .45; }
-  .btn-secondary {
-    background: transparent; color: #1A73E8; font-weight: 700; border-radius: 1rem;
-    padding: 1rem 1.25rem; border: 2px solid #1A73E8;
-  }
-  html.dark .btn-secondary { color: #8AB4F8; border-color: #8AB4F8; }
-  .btn-danger { background: #fdecec; color: #9b1c1c; font-weight: 700; border-radius: 0.75rem; padding: .6rem .9rem; }
-  html.dark .btn-danger { background: #3a1616; color: #ff9b9b; }
-  .card { background: white; border-radius: 1.1rem; box-shadow: 0 1px 6px rgba(11,18,32,.12); }
-  html.dark .card { background: #122A46; box-shadow: none; border: 1px solid #1A73E8; }
-  .chip {
-    display: inline-flex; align-items: center; gap: .4rem; padding: .55rem .9rem; border-radius: 999px;
-    border: 2px solid #CFE0FB; font-weight: 600; font-size: .85rem; cursor: pointer; user-select: none;
-  }
-  .chip.active { background: #1A73E8; color: white; border-color: #1A73E8; }
-  html.dark .chip { border-color: #28406B; }
-  html.dark .chip.active { background: #669DF6; color: #0B1220; border-color: #669DF6; }
-  .split-box { background: #FFF7E6; border: 2px dashed #D97706; border-radius: .75rem; padding: .75rem; }
-  html.dark .split-box { background: #2a2010; border-color: #D97706; }
-  .hidden { display: none !important; }
-  .toast {
-    position: fixed; bottom: calc(1rem + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
-    background: #0B1220; color: #EAF1FB; padding: .7rem 1.1rem; border-radius: .8rem; font-size: .9rem;
-    z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,.35); opacity: 0; transition: opacity .25s; pointer-events: none;
-  }
-  .toast.show { opacity: 1; }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-thumb { background: #AECBFA; border-radius: 3px; }
+  html,body{ overscroll-behavior:none; -webkit-tap-highlight-color:transparent; }
+  body{ padding-bottom: env(safe-area-inset-bottom); }
+  #editorCanvas{ touch-action:none; display:block; background:#111; }
+  .tool-btn[aria-pressed="true"]{ background:#1A73E8; color:#fff; }
+  input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button{ opacity:1; }
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  .swatch{ width:26px; height:26px; border-radius:9999px; border:2px solid #fff; box-shadow:0 0 0 1px #d1d5db; }
+  .swatch[aria-pressed="true"]{ box-shadow:0 0 0 2px #1A73E8; }
+  .step-dot{ width:9px; height:9px; border-radius:9999px; background:#cbd5e1; }
+  .step-dot.active{ background:#1A73E8; }
+  .photo-thumb{ width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:0.5rem; background:#f1f5f9; }
+  textarea{ resize:vertical; }
 </style>
 </head>
-<body class="min-h-screen">
+<body class="bg-slate-50 text-slate-800 font-sans">
 
-<header class="safe-top sticky top-0 z-30 bg-brand-600 text-white shadow-md">
-  <div class="flex items-center justify-between px-4 py-3">
-    <div class="flex items-center gap-2 min-w-0">
-      <div class="text-2xl">🌲</div>
-      <div class="min-w-0">
-        <div class="font-bold leading-tight text-sm sm:text-base truncate">RTEC GTW Job Builder</div>
-        <div id="statusLine" class="text-[11px] text-brand-100 leading-tight">Starting…</div>
-      </div>
+<header class="bg-brand text-white sticky top-0 z-30 shadow">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div>
+      <h1 class="text-lg font-bold leading-tight">RTEC GTW Job Builder</h1>
+      <p class="text-xs text-brand-light opacity-90" id="jobSubtitle">New Job</p>
     </div>
-    <button id="themeToggle" class="tap px-3 rounded-xl bg-brand-700 active:bg-brand-800 text-lg">🌓</button>
+    <button id="newJobBtn" class="text-xs bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg">New Job</button>
   </div>
-  <nav id="stepNav" class="grid grid-cols-4 text-center text-xs font-semibold border-t border-brand-700"></nav>
+  <nav class="max-w-3xl mx-auto px-4 pb-3 flex items-center gap-2 text-xs" id="stepperNav"></nav>
 </header>
 
-<main id="app" class="max-w-2xl mx-auto px-4 py-5 pb-28"></main>
+<main class="max-w-3xl mx-auto px-4 py-4 pb-28" id="appRoot"></main>
 
-<div id="toast" class="toast"></div>
+<div id="toastHost" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none"></div>
 
-<!-- Confirm modal -->
-<div id="confirmModal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
-  <div class="card w-full max-w-sm p-5">
-    <div id="confirmTitle" class="font-bold text-lg mb-1"></div>
-    <div id="confirmBody" class="text-sm opacity-80 mb-4"></div>
-    <div class="flex gap-3">
-      <button id="confirmCancel" class="btn-secondary flex-1 tap">Cancel</button>
-      <button id="confirmOk" class="btn-primary flex-1 tap" style="background:#9b1c1c">Confirm</button>
+<footer class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-30" id="footerNav">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+    <button id="backBtn" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-medium disabled:opacity-40">Back</button>
+    <div class="flex gap-1" id="stepDots"></div>
+    <button id="nextBtn" class="px-4 py-2.5 rounded-lg bg-brand text-white font-semibold">Next</button>
+  </div>
+</footer>
+
+<!-- ===================== Photo Doodle Editor Modal ===================== -->
+<div id="editorModal" class="fixed inset-0 z-50 bg-black hidden flex flex-col">
+  <div class="flex items-center justify-between px-3 py-2 bg-slate-900 text-white text-sm">
+    <span class="font-semibold">Edit Photo</span>
+    <div class="flex gap-2">
+      <button id="edCancelBtn" class="px-3 py-1.5 rounded bg-slate-700">Cancel</button>
+      <button id="edSaveBtn" class="px-3 py-1.5 rounded bg-brand font-semibold">Save</button>
+    </div>
+  </div>
+  <div class="relative flex-1 overflow-hidden" id="edCanvasWrap">
+    <canvas id="editorCanvas"></canvas>
+  </div>
+  <div class="bg-slate-900 text-white px-2 py-2 flex flex-col gap-2">
+    <div class="flex gap-1.5 overflow-x-auto pb-1" id="edToolRow">
+      <button data-tool="pan" class="tool-btn px-3 py-2 rounded bg-slate-700 text-xs font-medium whitespace-nowrap">✋ Pan/Zoom</button>
+      <button data-tool="draw" class="tool-btn px-3 py-2 rounded bg-slate-700 text-xs font-medium whitespace-nowrap">✏️ Draw</button>
+      <button data-tool="text" class="tool-btn px-3 py-2 rounded bg-slate-700 text-xs font-medium whitespace-nowrap">T Text</button>
+      <button data-tool="circle" class="tool-btn px-3 py-2 rounded bg-slate-700 text-xs font-medium whitespace-nowrap">🔍 Magnify</button>
+      <button data-tool="select" class="tool-btn px-3 py-2 rounded bg-slate-700 text-xs font-medium whitespace-nowrap">↖ Select</button>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <label class="flex items-center gap-1 text-xs text-slate-200"><input type="checkbox" id="edArrowMode"> Arrow mode</label>
+      <div class="flex gap-1.5 ml-1" id="edSwatches"></div>
+      <div class="flex-1"></div>
+      <button id="edUndoBtn" class="px-2.5 py-1.5 rounded bg-slate-700 text-xs">Undo</button>
+      <button id="edClearBtn" class="px-2.5 py-1.5 rounded bg-slate-700 text-xs">Clear</button>
+      <button id="edDeleteBtn" class="px-2.5 py-1.5 rounded bg-red-700 text-xs disabled:opacity-30" disabled>Delete</button>
+      <button id="edResetZoomBtn" class="px-2.5 py-1.5 rounded bg-slate-700 text-xs">Reset Zoom</button>
     </div>
   </div>
 </div>
-
-<!-- Photo markup modal -->
-<div id="markupModal" class="hidden fixed inset-0 z-50 bg-black flex flex-col">
-  <div class="flex items-center justify-between px-4 py-3 text-white safe-top">
-    <div class="font-bold">Mark Up Photo</div>
-    <button id="markupClose" class="tap px-3 text-2xl leading-none">✕</button>
-  </div>
-  <div id="markupViewport" class="flex-1 flex items-center justify-center overflow-hidden p-2">
-    <div id="markupZoomWrap" style="transform-origin:0 0;">
-      <canvas id="markupCanvas" class="max-w-full max-h-full rounded-lg"></canvas>
-    </div>
-  </div>
-  <div class="px-3 pb-2">
-    <div class="flex gap-2 justify-center mb-2 flex-wrap" id="markupTools"></div>
-    <div class="flex gap-2 justify-center mb-2" id="markupColors"></div>
-    <div class="flex items-center gap-3 px-2 mb-3 text-white text-xs">
-      <span>Thin</span>
-      <input id="markupWidth" type="range" min="2" max="18" value="6" class="flex-1">
-      <span>Thick</span>
-      <button id="markupResetZoom" class="btn-secondary text-white border-white text-xs px-2 py-1 rounded-lg shrink-0">🔍 Reset Zoom</button>
-    </div>
-    <div class="text-center text-white text-[11px] opacity-70 mb-2">Pinch with two fingers to zoom in for precision work</div>
-  </div>
-  <div class="grid grid-cols-4 gap-2 px-3 pb-3" style="padding-bottom: calc(.75rem + env(safe-area-inset-bottom));">
-    <button id="markupUndo" class="btn-secondary tap text-white border-white col-span-1 text-sm">↩ Undo</button>
-    <button id="markupClear" class="btn-secondary tap text-white border-white col-span-1 text-sm">🗑 Clear</button>
-    <button id="markupCancel" class="btn-secondary tap text-white border-white col-span-1 text-sm">Cancel</button>
-    <button id="markupSave" class="btn-primary tap col-span-1 text-sm">✓ Save</button>
-  </div>
-</div>
-
-<datalist id="speciesList"></datalist>
 
 <script>
-/* =========================== Constants =========================== */
-const STORAGE_KEY = 'arborist_inspection_v1';
-const DB_NAME = 'arborist-field-inspection';
-const DB_STORE = 'drafts';
+/* ===================== Runtime icon + manifest (fully self-contained) ===================== */
+(function generateIcons(){
+  function iconDataUrl(size){
+    const c = document.createElement('canvas'); c.width=size; c.height=size;
+    const ctx = c.getContext('2d');
+    const r = size*0.19;
+    ctx.fillStyle = '#1A73E8';
+    ctx.beginPath();
+    ctx.moveTo(r,0); ctx.arcTo(size,0,size,size,r); ctx.arcTo(size,size,0,size,r); ctx.arcTo(0,size,0,0,r); ctx.arcTo(0,0,size,0,r);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold '+(size*0.32)+'px Arial, sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('GTW', size/2, size*0.56);
+    return c.toDataURL('image/png');
+  }
+  const icon192 = iconDataUrl(192), icon512 = iconDataUrl(512);
+  document.getElementById('faviconLink').href = icon192;
+  document.getElementById('appleTouchIconLink').href = icon192;
+  const manifest = {
+    name: 'RTEC GTW Job Builder', short_name: 'GTW Job Builder', start_url: '.', display: 'standalone',
+    background_color: '#F8FAFC', theme_color: '#1A73E8',
+    icons: [{src:icon192, sizes:'192x192', type:'image/png'},{src:icon512, sizes:'512x512', type:'image/png'}]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], {type:'application/manifest+json'});
+  document.getElementById('manifestLink').href = URL.createObjectURL(blob);
+})();
 
-const SPECIES_OPTIONS = [
-  'Red Oak','White Oak','Bur Oak','Pin Oak','Sugar Maple','Red Maple','Silver Maple',
-  'Norway Maple','Japanese Maple','River Birch','American Elm','Honeylocust',
-  'Littleleaf Linden','Flowering Pear (Callery)','Flowering Dogwood','Eastern Redbud',
-  'Colorado Blue Spruce','Norway Spruce','White Pine','Austrian Pine','Arborvitae',
-  'Crabapple','Magnolia','Tulip Poplar','Black Walnut','Hackberry','American Sycamore',
-  'Green Ash','White Ash','Shagbark Hickory','Weeping Willow','Eastern Red Cedar',
-  'Boxwood (shrub)','Burning Bush (shrub)','Serviceberry','Sweetgum','Kousa Dogwood'
-];
-
-const TASK_TYPES = [
-  'Structural Pruning','Crown Cleaning','Crown Thinning','Crown Raising','Crown Reduction',
-  'Deadwooding / Deadwood Removal','Cabling & Bracing','Root Collar Excavation','Root Pruning',
-  'Cavity / Decay Treatment','PHC – Soil Injection','PHC – Foliar Spray','PHC – Deep Root Fertilization',
-  'Insect / Disease Treatment','Tree Removal','Stump Grinding','Mulching','Lightning Protection System',
-  'Risk Mitigation – Target Reduction','Other'
-];
-
-const EQUIPMENT_FIELDS = [
-  { key: 'bucketTruck', label: "Bucket Truck", options: ['Not Needed', "60'", "75'"] },
-  { key: 'chipTruck', label: 'Chip Truck', options: ['Not Needed', 'Small', 'Standard'] },
-  { key: 'extraChipTruck', label: 'Extra Chip Truck', options: ['Not Needed', 'Small', 'Standard'] },
-  { key: 'crane', label: 'Crane', options: ['Not Needed', 'Needed'], priceKey: 'cranePrice' },
-  { key: 'stumpGrinder', label: 'Stump Grinder', options: ['Not Needed', 'Rayco', 'Timber'] },
-  { key: 'miniLoader', label: 'Mini Loader', options: ['Not Needed', 'ML1', 'ML2'] },
-  { key: 'spyderLift', label: 'Spyder Lift', options: ['Not Needed', 'Needed'], priceKey: 'spyderLiftPrice' }
-];
-
-const PERMITS_CHECKLIST = ["Neighbor's Written Permission", 'Dominion', 'Pepco', 'Parking Permits', 'Miss Utility', 'DDOT Removal Permit'];
-
-/* =========================== Persistence (IndexedDB) =========================== */
-let dbPromise = null;
-function openDb() {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE, { keyPath: 'id' });
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-  return dbPromise;
-}
-function dbPut(value) {
-  return openDb().then(db => new Promise((resolve, reject) => {
-    const req = db.transaction([DB_STORE], 'readwrite').objectStore(DB_STORE).put(value);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  }));
-}
-function dbGet(id) {
-  return openDb().then(db => new Promise((resolve, reject) => {
-    const req = db.transaction([DB_STORE], 'readonly').objectStore(DB_STORE).get(id);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  }));
-}
-function dbDelete(id) {
-  return openDb().then(db => new Promise((resolve, reject) => {
-    const req = db.transaction([DB_STORE], 'readwrite').objectStore(DB_STORE).delete(id);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  }));
-}
-
-let persistTimer = null;
-function schedulePersist() {
-  clearTimeout(persistTimer);
-  persistTimer = setTimeout(() => {
-    dbPut({ id: 'current', state }).then(() => flashToast('Saved ✓')).catch(() => {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+/* Best-effort offline caching via a blob-registered service worker. Requires the page be served
+   over https:// (or localhost) - service workers are not available under file://, and iOS Safari's
+   support for blob-URL service workers can vary by version. The app works fully online regardless;
+   this only adds offline-after-first-load on platforms/hosting that support it. */
+(function registerSW(){
+  if(!('serviceWorker' in navigator)) return;
+  const swSrc = `
+    const CACHE='rtec-gtw-v1';
+    const ASSETS=[self.registration.scope,'https://cdn.tailwindcss.com','https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js','https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'];
+    self.addEventListener('install', e=>{ e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).catch(()=>{})); self.skipWaiting(); });
+    self.addEventListener('activate', e=>{ self.clients.claim(); });
+    self.addEventListener('fetch', e=>{
+      e.respondWith(caches.match(e.request).then(cached=>{
+        const fetchPromise = fetch(e.request).then(res=>{ const copy=res.clone(); caches.open(CACHE).then(c=>c.put(e.request, copy)); return res; }).catch(()=>cached);
+        return cached || fetchPromise;
+      }));
     });
-  }, 400);
-}
+  `;
+  try{
+    const url = URL.createObjectURL(new Blob([swSrc], {type:'application/javascript'}));
+    navigator.serviceWorker.register(url).catch(()=>{});
+  }catch(e){}
+})();
 
-/* =========================== State =========================== */
-function todayISO() { return new Date().toISOString().slice(0, 10); }
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+/* ===================== Constants ===================== */
+const WORK_TASK_TYPES = [
+  'Prune - Crown Clean','Prune - Crown Raise','Prune - Crown Reduce','Prune - Crown Thin',
+  'Prune - Deadwood Removal','Prune - Structural / Young Tree Training','Prune - Vista / View',
+  'Prune - Clearance (Structure/Utility)','Removal - Full Tree Removal','Removal - Partial / Hazard Limb',
+  'Stump Grinding','Cabling / Bracing','Root Collar Excavation','PHC - Deep Root Fertilization',
+  'PHC - Insect Treatment','PHC - Disease Treatment','PHC - Soil Injection / Amendment',
+  'Planting - New Tree Installation','Mulching','Haul Wood','Chip Debris / Haul Chips','Other (specify)'
+];
+const ACCESS_ITEMS = [
+  ['neighborPermission',"Neighbor's Written Permission"],
+  ['dominion','Dominion'],
+  ['pepco','Pepco'],
+  ['parkingPermits','Parking Permits'],
+  ['missUtility','Miss Utility'],
+  ['ddotRemoval','DDOT Removal Permit']
+];
+const COLORS = ['#FF3B30','#FFCC00','#FFFFFF','#111111','#1A73E8','#34C759'];
 
-function defaultGps() { return { lat: '', lng: '', accuracy: null, capturedAt: null }; }
-function defaultEquipment() {
-  const eq = { equipmentOther: '' };
-  EQUIPMENT_FIELDS.forEach(f => {
-    eq[f.key] = 'Not Needed';
-    if (f.priceKey) eq[f.priceKey] = '';
-  });
-  return eq;
-}
-
-function defaultState() {
+/* ===================== State ===================== */
+let uidCounter = 1;
+function uid(){ return uidCounter++; }
+function newTask(){ return { id: uid(), type: WORK_TASK_TYPES[0], customType:'', details:'', hours:'', price:'', splitJob:false, splitVisit:false, photo:null }; }
+function newTree(){ return { id: uid(), mainPhoto:null, gps:{lat:'',lng:'',accuracy:''}, species:'', dbh:'', location:'', price:'', tasks:[newTask()], open:true }; }
+function newState(){
   return {
-    step: 1,
-    client: {
-      singleOpsLead: '', clientName: '', propertyAddress: '', contactName: '',
-      contactPhone: '', contactEmail: '', inspectionDate: todayISO(), arboristName: ''
+    step: 0,
+    client: { leadNum:'', city:'', name:'', phone:'', email:'', date:'', arborist:'', crewSize:'' },
+    trees: [newTree()],
+    equipment: {
+      bucketTruck:'None', chipTruck:'None', extraChipTruck:'No',
+      crane:{ needed:false, spec:'', price:'' },
+      stumpGrinder:'None', miniLoader:'None',
+      spyderLift:{ needed:false, spec:'', price:'' }
     },
-    trees: [],
-    workPlan: {
-      crewSize: '', equipment: defaultEquipment(), trafficControl: '',
-      permitsChecklist: [], permitsCustom: '', safetyConcerns: '',
-      crewNotes: '', clientNotes: '', internalNotes: '', schedulingConcerns: ''
-    }
+    safety: '',
+    accessPermits: { standard:{ neighborPermission:false,dominion:false,pepco:false,parkingPermits:false,missUtility:false,ddotRemoval:false }, custom:[] },
+    notes: { crew:'', client:'', internal:'', scheduling:'' }
   };
 }
+let state = loadState() || newState();
 
-let state = defaultState();
-
-function setByPath(obj, path, value) {
-  const parts = path.split('.');
-  let cur = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    const key = /^\d+$/.test(parts[i]) ? Number(parts[i]) : parts[i];
-    cur = cur[key];
-  }
-  const lastKey = /^\d+$/.test(parts[parts.length - 1]) ? Number(parts[parts.length - 1]) : parts[parts.length - 1];
-  cur[lastKey] = value;
+function saveState(){ try{ localStorage.setItem('rtecGtwJob', JSON.stringify(state)); }catch(e){} }
+function loadState(){ try{ const raw = localStorage.getItem('rtecGtwJob'); if(!raw) return null; const s = JSON.parse(raw); uidCounter = 1 + Math.max(0, ...collectIds(s)); return s; }catch(e){ return null; } }
+function collectIds(s){
+  const ids=[];
+  (s.trees||[]).forEach(t=>{ ids.push(t.id||0); (t.tasks||[]).forEach(tk=>ids.push(tk.id||0)); });
+  return ids;
 }
-function getByPath(obj, path) {
-  return path.split('.').reduce((cur, k) => (cur == null ? cur : cur[/^\d+$/.test(k) ? Number(k) : k]), obj);
+let debounceTimer=null;
+function persist(){ clearTimeout(debounceTimer); debounceTimer = setTimeout(saveState, 300); }
+
+/* ===================== Utils ===================== */
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function setPath(obj, path, value){ const parts = path.split('.'); let cur=obj; for(let i=0;i<parts.length-1;i++){ cur = cur[parts[i]]; } cur[parts[parts.length-1]] = value; }
+function getPath(obj, path){ return path.split('.').reduce((c,p)=> c==null?c:c[p], obj); }
+function toast(msg){
+  const host = document.getElementById('toastHost');
+  const el = document.createElement('div');
+  el.className = 'bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg';
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(()=>{ el.remove(); }, 2600);
 }
-
-/* =========================== Small UI helpers =========================== */
-function flashToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove('show'), 1600);
-}
-
-function confirmDialog(title, body) {
-  return new Promise(resolve => {
-    const modal = document.getElementById('confirmModal');
-    document.getElementById('confirmTitle').textContent = title;
-    document.getElementById('confirmBody').textContent = body;
-    modal.classList.remove('hidden');
-    const ok = document.getElementById('confirmOk');
-    const cancel = document.getElementById('confirmCancel');
-    function cleanup(result) {
-      modal.classList.add('hidden');
-      ok.removeEventListener('click', onOk);
-      cancel.removeEventListener('click', onCancel);
-      resolve(result);
-    }
-    function onOk() { cleanup(true); }
-    function onCancel() { cleanup(false); }
-    ok.addEventListener('click', onOk);
-    cancel.addEventListener('click', onCancel);
-  });
-}
-
-function slugify(s) {
-  return (s || '').toString().trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'Unnamed';
-}
-function esc(s) {
-  return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-function money(v) {
-  const n = parseFloat(v) || 0;
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function photoLabel(treeIdx, taskIdx) {
-  return taskIdx == null ? String(treeIdx + 1) : `${treeIdx + 1}${String.fromCharCode(97 + taskIdx)}`;
-}
-
-/* =========================== Step nav / routing =========================== */
-const STEP_LABELS = ['Client & Site', 'Trees', 'Work Plan', 'Review & Export'];
-
-function renderStepNav() {
-  const nav = document.getElementById('stepNav');
-  nav.innerHTML = STEP_LABELS.map((label, i) => {
-    const n = i + 1;
-    const active = state.step === n;
-    return `<button data-goto-step="${n}" class="tap py-2 ${active ? 'bg-brand-800 text-white' : 'text-brand-100'}">${n}. ${label}</button>`;
-  }).join('');
-}
-
-function goToStep(n) {
-  state.step = n;
-  schedulePersist();
-  renderAll();
-  window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
-}
-
-function renderAll() {
-  renderStepNav();
-  const app = document.getElementById('app');
-  if (state.step === 1) app.innerHTML = renderStep1();
-  else if (state.step === 2) app.innerHTML = renderStep2();
-  else if (state.step === 3) app.innerHTML = renderStep3();
-  else app.innerHTML = renderStep4();
-  updateTotals();
-  const siteMapHolder = document.getElementById('siteMapHolder');
-  if (siteMapHolder) {
-    const canvas = renderSiteMapCanvas(560, 380);
-    canvas.style.maxWidth = '100%';
-    siteMapHolder.appendChild(canvas);
-  }
-}
-
-/* =========================== Step 1: Client & Site =========================== */
-function renderStep1() {
-  const field = (label, path, placeholder = '', type = 'text') => `
-    <div>
-      <label class="field-label">${label}</label>
-      <input class="field-input mt-1" type="${type}" data-bind="client.${path}" value="${esc(getByPath(state, 'client.' + path))}" placeholder="${esc(placeholder)}">
-    </div>`;
-  return `
-    <div class="space-y-4">
-      <div class="card p-4">
-        <div class="grid grid-cols-1 gap-3">
-          ${field('SingleOps Lead #', 'singleOpsLead', 'e.g. 10234')}
-          ${field('Client Name', 'clientName', 'Jane Smith')}
-          ${field('Job Site Address', 'propertyAddress', '123 Maple St, Washington DC')}
-          ${field('Contact Name', 'contactName', 'If different from client')}
-          <div class="grid grid-cols-2 gap-3">
-            ${field('Contact Phone', 'contactPhone', '(555) 555-5555', 'tel')}
-            ${field('Contact Email', 'contactEmail', 'name@email.com', 'email')}
-          </div>
-          ${field('Inspection Date', 'inspectionDate', '', 'date')}
-          ${field('Arborist Name', 'arboristName', 'Your name')}
-        </div>
-      </div>
-      <button class="btn-primary w-full tap" data-next-from-1>Next: Tree Inventory →</button>
-    </div>`;
-}
-
-/* =========================== Step 2: Tree Inventory =========================== */
-function addTree() {
-  state.trees.forEach(t => t.expanded = false);
-  state.trees.push({
-    id: uid(), species: '', dbh: '', location: '', price: '',
-    gps: defaultGps(), mainPhoto: null, tasks: [], expanded: true
-  });
-  schedulePersist();
-  renderAll();
-  setTimeout(() => {
-    const el = document.querySelector(`[data-tree-anchor="${state.trees[state.trees.length - 1].id}"]`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 30);
-}
-
-function toggleTree(id) {
-  const t = state.trees.find(x => x.id === id);
-  t.expanded = !t.expanded;
-  renderAll();
-}
-
-async function removeTree(id) {
-  const ok = await confirmDialog('Delete this tree?', 'This removes its photos and work items. This cannot be undone.');
-  if (!ok) return;
-  state.trees = state.trees.filter(x => x.id !== id);
-  schedulePersist();
-  renderAll();
-}
-
-function addTask(treeId) {
-  const t = state.trees.find(x => x.id === treeId);
-  t.tasks.push({ id: uid(), type: TASK_TYPES[0], customType: '', details: '', hours: '', price: '', isSplit: false, splitHours: '', splitPrice: '', photo: null });
-  schedulePersist();
-  renderAll();
-}
-function removeTask(treeId, taskId) {
-  const t = state.trees.find(x => x.id === treeId);
-  t.tasks = t.tasks.filter(x => x.id !== taskId);
-  schedulePersist();
-  renderAll();
-}
-function toggleSplit(treeId, taskId) {
-  const t = state.trees.find(x => x.id === treeId);
-  const task = t.tasks.find(x => x.id === taskId);
-  task.isSplit = !task.isSplit;
-  schedulePersist();
-  renderAll();
-}
-
-function captureGps(treeId) {
-  const t = state.trees.find(x => x.id === treeId);
-  if (!navigator.geolocation) { flashToast('Geolocation not supported on this device'); return; }
-  flashToast('Getting GPS fix…');
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      t.gps.lat = pos.coords.latitude.toFixed(6);
-      t.gps.lng = pos.coords.longitude.toFixed(6);
-      t.gps.accuracy = pos.coords.accuracy;
-      t.gps.capturedAt = new Date().toISOString();
-      schedulePersist();
-      renderAll();
-      flashToast(pos.coords.accuracy > 25 ? 'GPS captured — weak signal, verify position' : 'GPS captured ✓');
-    },
-    err => {
-      let msg = 'GPS unavailable — enter coordinates manually';
-      if (err.code === 1) msg = 'Location permission denied — enable in Settings or enter manually';
-      else if (err.code === 3) msg = 'GPS timed out (heavy canopy?) — enter manually';
-      flashToast(msg);
-    },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-  );
-}
-
-/* ---- Photo slot targeting: "main:<treeId>" or "task:<treeId>:<taskId>" ---- */
-function parsePhotoTarget(str) {
-  const [kind, treeId, taskId] = str.split(':');
-  return { kind, treeId, taskId };
-}
-function getPhotoSlot(target) {
-  const t = state.trees.find(x => x.id === target.treeId);
-  if (target.kind === 'main') return { get: () => t.mainPhoto, set: p => { t.mainPhoto = p; } };
-  const task = t.tasks.find(x => x.id === target.taskId);
-  return { get: () => task.photo, set: p => { task.photo = p; } };
-}
-
-async function removePhoto(targetStr) {
-  const ok = await confirmDialog('Remove this photo?', 'This cannot be undone.');
-  if (!ok) return;
-  getPhotoSlot(parsePhotoTarget(targetStr)).set(null);
-  schedulePersist();
-  renderAll();
-}
-
-function renderPhotoBlock(label, photo, targetStr) {
-  if (!photo) {
-    return `
-      <div class="flex gap-2">
-        <button class="chip" data-take-photo="${targetStr}">📷 Take Photo</button>
-        <button class="chip" data-choose-photo="${targetStr}">🖼 Choose</button>
-      </div>`;
-  }
-  return `
-    <div class="flex items-center gap-3">
-      <img src="${photo.hasMarkup ? photo.markupDataUrl : photo.originalDataUrl}" class="w-20 h-20 object-cover rounded-xl border-2 border-brand-200">
-      <div class="flex flex-col gap-1">
-        <button class="text-xs btn-secondary py-1 px-2 rounded-lg" data-remark-photo="${targetStr}">✎ Edit Markup</button>
-        <button class="text-xs btn-danger py-1 px-2" data-remove-photo="${targetStr}">✕ Remove</button>
-      </div>
-      <div class="text-xs opacity-60 ml-auto">Photo ${esc(label)}</div>
-    </div>`;
-}
-
-function taskTotals(task) {
-  const hrs = (parseFloat(task.hours) || 0) + (task.isSplit ? (parseFloat(task.splitHours) || 0) : 0);
-  const price = (parseFloat(task.price) || 0) + (task.isSplit ? (parseFloat(task.splitPrice) || 0) : 0);
-  return { hrs, price };
-}
-function treeTotals(t) {
-  return t.tasks.reduce((acc, task) => {
-    const tt = taskTotals(task);
-    acc.hrs += tt.hrs; acc.price += tt.price;
-    return acc;
-  }, { hrs: 0, price: (parseFloat(t.price) || 0) });
-}
-
-function renderTreeCard(t, idx) {
-  const totals = treeTotals(t);
-  if (!t.expanded) {
-    return `
-      <div class="card p-4 flex items-center justify-between" data-tree-anchor="${t.id}">
-        <div class="flex items-center gap-3 min-w-0">
-          ${t.mainPhoto ? `<img src="${t.mainPhoto.hasMarkup ? t.mainPhoto.markupDataUrl : t.mainPhoto.originalDataUrl}" class="w-10 h-10 object-cover rounded-full border-2 border-brand-200">` : `<div class="w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold">${idx + 1}</div>`}
-          <div class="min-w-0">
-            <div class="font-bold truncate">${esc(t.species) || 'Unspecified Species'}</div>
-            <div class="text-xs opacity-60 truncate">${esc(t.location) || 'No location set'} · ${t.tasks.length} task(s) · $${money(totals.price)}</div>
-          </div>
-        </div>
-        <button class="btn-secondary tap px-3 text-sm" data-toggle-tree="${t.id}">Edit</button>
-      </div>`;
-  }
-
-  const tasksHtml = t.tasks.map((task, taskIdx) => {
-    const tt = taskTotals(task);
-    return `
-    <div class="card p-3 space-y-2" style="border:1px solid #CFE0FB">
-      <div class="flex items-center justify-between">
-        <div class="text-xs font-bold opacity-50">TASK ${photoLabel(idx, taskIdx)}</div>
-        <button class="chip ${task.isSplit ? 'active' : ''} text-xs" data-toggle-split="${t.id}:${task.id}">⚡ Split Job</button>
-      </div>
-      <select class="field-input" data-bind="trees.${idx}.tasks.${taskIdx}.type">
-        ${TASK_TYPES.map(opt => `<option value="${opt}" ${opt === task.type ? 'selected' : ''}>${opt}</option>`).join('')}
-      </select>
-      ${task.type === 'Other' ? `<input class="field-input" placeholder="Describe task type" data-bind="trees.${idx}.tasks.${taskIdx}.customType" value="${esc(task.customType)}">` : ''}
-      <textarea class="field-input" rows="2" placeholder="Task details / specifics" data-bind="trees.${idx}.tasks.${taskIdx}.details">${esc(task.details)}</textarea>
-      <div class="grid grid-cols-2 gap-2">
-        <div><label class="field-label">${task.isSplit ? 'Hours – Job A' : 'Est. Hours'}</label><input class="field-input mt-1" type="number" min="0" step="0.25" placeholder="0.0" data-bind="trees.${idx}.tasks.${taskIdx}.hours" data-recalc="${t.id}" value="${esc(task.hours)}"></div>
-        <div><label class="field-label">${task.isSplit ? 'Price – Job A' : 'Price'}</label><input class="field-input mt-1" type="number" min="0" step="0.01" placeholder="$0.00" data-bind="trees.${idx}.tasks.${taskIdx}.price" data-recalc="${t.id}" value="${esc(task.price)}"></div>
-      </div>
-      ${task.isSplit ? `
-      <div class="split-box space-y-2">
-        <div class="text-xs font-bold" style="color:#B45309">SPLIT JOB — second billing entry</div>
-        <div class="grid grid-cols-2 gap-2">
-          <div><label class="field-label">Hours – Job B</label><input class="field-input mt-1" type="number" min="0" step="0.25" placeholder="0.0" data-bind="trees.${idx}.tasks.${taskIdx}.splitHours" data-recalc="${t.id}" value="${esc(task.splitHours)}"></div>
-          <div><label class="field-label">Price – Job B</label><input class="field-input mt-1" type="number" min="0" step="0.01" placeholder="$0.00" data-bind="trees.${idx}.tasks.${taskIdx}.splitPrice" data-recalc="${t.id}" value="${esc(task.splitPrice)}"></div>
-        </div>
-      </div>` : ''}
-      <div>
-        <label class="field-label">Task Photo</label>
-        <div class="mt-1">${renderPhotoBlock(photoLabel(idx, taskIdx), task.photo, `task:${t.id}:${task.id}`)}</div>
-      </div>
-      <div class="flex justify-between items-center pt-1">
-        <div class="text-xs opacity-60">Subtotal: <span id="task-subtotal-${task.id}">${tt.hrs.toFixed(2)} hrs · $${money(tt.price)}</span></div>
-        <button class="btn-danger tap shrink-0" data-remove-task="${t.id}:${task.id}">🗑 Remove Task</button>
-      </div>
-    </div>`;
-  }).join('');
-
-  return `
-    <div class="card p-4 space-y-4" data-tree-anchor="${t.id}">
-      <div class="flex items-center justify-between">
-        <div class="font-bold text-lg">Tree ${idx + 1}</div>
-        <div class="flex gap-2">
-          <button class="btn-secondary tap px-3 text-sm" data-toggle-tree="${t.id}">Collapse</button>
-          <button class="btn-danger tap" data-remove-tree="${t.id}">🗑 Delete</button>
-        </div>
-      </div>
-
-      <div>
-        <label class="field-label">Main Photo</label>
-        <div class="mt-1">${renderPhotoBlock(photoLabel(idx, null), t.mainPhoto, `main:${t.id}`)}</div>
-      </div>
-
-      <div class="grid grid-cols-1 gap-3">
-        <div>
-          <label class="field-label">Species / Tree Type</label>
-          <input class="field-input mt-1" list="speciesList" data-bind="trees.${idx}.species" value="${esc(t.species)}" placeholder="e.g. Red Oak">
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="field-label">DBH</label><input class="field-input mt-1" data-bind="trees.${idx}.dbh" value="${esc(t.dbh)}" placeholder='e.g. 18"'></div>
-          <div><label class="field-label">Tree Price</label><input class="field-input mt-1" type="number" min="0" step="0.01" data-bind="trees.${idx}.price" data-recalc="${t.id}" value="${esc(t.price)}" placeholder="$0.00"></div>
-        </div>
-        <div>
-          <label class="field-label">Location on Landscape</label>
-          <input class="field-input mt-1" data-bind="trees.${idx}.location" value="${esc(t.location)}" placeholder="e.g. Front yard, right of walkway">
-        </div>
-      </div>
-
-      <div>
-        <div class="flex items-center justify-between mb-2">
-          <label class="field-label">GPS Location</label>
-          <button class="chip" data-capture-gps="${t.id}">📍 Capture Current GPS Position</button>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="field-label">Latitude</label><input class="field-input mt-1" type="number" step="0.000001" data-bind="trees.${idx}.gps.lat" value="${esc(t.gps.lat)}" placeholder="e.g. 38.627003"></div>
-          <div><label class="field-label">Longitude</label><input class="field-input mt-1" type="number" step="0.000001" data-bind="trees.${idx}.gps.lng" value="${esc(t.gps.lng)}" placeholder="e.g. -90.199402"></div>
-        </div>
-        <div class="text-xs opacity-70 mt-1">
-          ${t.gps.accuracy
-            ? `Accuracy: ±${Math.round(t.gps.accuracy)} m ${t.gps.accuracy > 25 ? '⚠️ weak signal — verify/adjust manually' : '✓ good fix'} · captured ${new Date(t.gps.capturedAt).toLocaleTimeString()}`
-            : 'No GPS fix captured yet — tap Capture, or enter coordinates manually if under heavy canopy.'}
-        </div>
-      </div>
-
-      <div>
-        <div class="flex items-center justify-between mb-2">
-          <label class="field-label">Work Tasks</label>
-          <div class="text-sm font-bold">Tree Total: <span id="subtotal-${t.id}">${totals.hrs.toFixed(2)} hrs · $${money(totals.price)}</span></div>
-        </div>
-        <div class="space-y-2">${tasksHtml || '<div class="text-sm opacity-60 py-2">No tasks added yet.</div>'}</div>
-        <button class="btn-secondary w-full tap mt-2" data-add-task="${t.id}">+ Add Work Task</button>
-      </div>
-    </div>`;
-}
-
-function renderStep2() {
-  const treesHtml = state.trees.map((t, i) => renderTreeCard(t, i)).join('');
-  return `
-    <div class="space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="font-bold text-lg">Tree &amp; Landscape Inventory</h2>
-        <div class="text-sm font-bold">Running Total: <span id="grand-total-step2">0.00 hrs · $0.00</span></div>
-      </div>
-      ${treesHtml}
-      <button class="btn-secondary w-full tap" data-add-tree>+ Add Another Tree</button>
-      <div class="flex gap-3 pt-2">
-        <button class="btn-secondary flex-1 tap" data-goto-step="1">← Back</button>
-        <button class="btn-primary flex-1 tap" data-goto-step-confirm="3">Proceed to Work Plan →</button>
-      </div>
-      <input type="file" id="fileCamera" accept="image/*" capture="environment" class="hidden">
-      <input type="file" id="fileLibrary" accept="image/*" class="hidden">
-    </div>`;
-}
-
-/* =========================== Step 3: Work Plan & Logistics =========================== */
-function renderStep3() {
-  const wp = state.workPlan;
-  const equipmentRows = EQUIPMENT_FIELDS.map(f => `
-    <div class="flex items-center gap-2">
-      <label class="field-label flex-1">${f.label}</label>
-      <select class="field-input" style="width:auto" data-bind="workPlan.equipment.${f.key}">
-        ${f.options.map(opt => `<option value="${opt}" ${wp.equipment[f.key] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-      </select>
-      ${f.priceKey && wp.equipment[f.key] !== 'Not Needed' ? `<input class="field-input" style="width:7rem" type="number" min="0" step="0.01" placeholder="$ Price" data-bind="workPlan.equipment.${f.priceKey}" value="${esc(wp.equipment[f.priceKey])}">` : ''}
-    </div>
-  `).join('');
-
-  const permitsChips = PERMITS_CHECKLIST.map(opt => `
-    <button type="button" class="chip ${wp.permitsChecklist.includes(opt) ? 'active' : ''}" data-toggle-permit="${esc(opt)}">${opt}</button>
-  `).join('');
-
-  const area = (label, path, placeholder) => `
-    <div>
-      <label class="field-label">${label}</label>
-      <textarea class="field-input mt-1" rows="3" data-bind="workPlan.${path}" placeholder="${esc(placeholder)}">${esc(getByPath(state, 'workPlan.' + path))}</textarea>
-    </div>`;
-
-  return `
-    <div class="space-y-4">
-      <div class="card p-4 space-y-3">
-        <h2 class="font-bold text-lg">Crew &amp; Equipment</h2>
-        <div>
-          <label class="field-label">Crew Size</label>
-          <input class="field-input mt-1" data-bind="workPlan.crewSize" value="${esc(wp.crewSize)}" placeholder="e.g. 3-person crew">
-        </div>
-        <div class="space-y-2">${equipmentRows}</div>
-        <input class="field-input mt-2" data-bind="workPlan.equipment.equipmentOther" value="${esc(wp.equipment.equipmentOther)}" placeholder="Other equipment (free text)">
-        ${area('Traffic Control Requirements', 'trafficControl', 'Cones, flaggers, street closure, etc.')}
-      </div>
-
-      <div class="card p-4 space-y-3">
-        <h2 class="font-bold text-lg">Access &amp; Permits</h2>
-        <div class="flex flex-wrap gap-2">${permitsChips}</div>
-        <input class="field-input mt-2" data-bind="workPlan.permitsCustom" value="${esc(wp.permitsCustom)}" placeholder="Other / custom permit or access item">
-      </div>
-
-      <div class="card p-4 space-y-3">
-        <h2 class="font-bold text-lg">Safety</h2>
-        <p class="text-xs opacity-70 bg-brand-50 dark:bg-brand-700/40 rounded-lg p-2">
-          For any utility conflict, specify: (1) which tree conflicts with a wire, (2) the conductor class, and
-          (3) whether PEPCO support needs to be a <b>wire drop</b>, <b>shut-off</b>, or <b>cleared</b>.
-        </p>
-        ${area('Arborist-Identified Safety Concerns', 'safetyConcerns', 'e.g. Tree 3 conflicts with secondary conductor — requires PEPCO wire drop before climb.')}
-      </div>
-
-      <div class="card p-4 space-y-3">
-        <h2 class="font-bold text-lg">Notes</h2>
-        ${area('Crew Notes (technical execution)', 'crewNotes', 'Internal instructions for the crew performing the work')}
-        ${area('Client Notes (scope explanation)', 'clientNotes', 'Professional, client-facing explanation of the proposed scope')}
-        ${area('Internal Notes (office / billing)', 'internalNotes', 'Reminders for office / billing staff')}
-        ${area('Scheduling Concerns', 'schedulingConcerns', 'Preferred days, times, access windows, constraints...')}
-      </div>
-
-      <div class="flex gap-3 pt-2">
-        <button class="btn-secondary flex-1 tap" data-goto-step="2">← Back</button>
-        <button class="btn-primary flex-1 tap" data-goto-step="4">Review &amp; Export →</button>
-      </div>
-    </div>`;
-}
-
-/* =========================== Step 4: Review & Export =========================== */
-function grandTotals() {
-  return state.trees.reduce((acc, t) => {
-    const tt = treeTotals(t);
-    acc.hrs += tt.hrs; acc.price += tt.price;
-    return acc;
-  }, { hrs: 0, price: 0 });
-}
-
-function renderStep4() {
-  const c = state.client;
-  const wp = state.workPlan;
-  const grand = grandTotals();
-  const equipmentSummary = EQUIPMENT_FIELDS
-    .filter(f => wp.equipment[f.key] !== 'Not Needed')
-    .map(f => `${f.label}: ${wp.equipment[f.key]}${f.priceKey && wp.equipment[f.priceKey] ? ' ($' + money(wp.equipment[f.priceKey]) + ')' : ''}`)
-    .concat(wp.equipment.equipmentOther ? [wp.equipment.equipmentOther] : [])
-    .join(', ');
-
-  return `
-    <div class="space-y-4">
-      <div class="card p-4">
-        <div class="flex justify-between items-center mb-2">
-          <h2 class="font-bold text-lg">Client &amp; Site</h2>
-          <button class="btn-secondary tap px-3 text-sm" data-goto-step="1">Edit</button>
-        </div>
-        <div class="text-sm space-y-1 opacity-90">
-          <div><b>${esc(c.clientName) || '—'}</b> ${c.singleOpsLead ? '· Lead #' + esc(c.singleOpsLead) : ''}</div>
-          <div>${esc(c.propertyAddress) || '—'}</div>
-          <div>${esc(c.contactPhone)} ${c.contactEmail ? '· ' + esc(c.contactEmail) : ''}</div>
-          <div>Inspection Date: ${esc(c.inspectionDate)}</div>
-          <div>Arborist: ${esc(c.arboristName) || '—'}</div>
-        </div>
-      </div>
-
-      <div class="card p-4">
-        <div class="flex justify-between items-center mb-2">
-          <h2 class="font-bold text-lg">Trees (${state.trees.length})</h2>
-          <button class="btn-secondary tap px-3 text-sm" data-goto-step="2">Edit</button>
-        </div>
-        <div class="text-sm space-y-1 opacity-90">
-          ${state.trees.map((t, i) => `<div>${i + 1}. ${esc(t.species) || 'Unspecified'} — ${t.tasks.length} task(s), $${money(treeTotals(t).price)}</div>`).join('') || '<div class="opacity-60">No trees added.</div>'}
-        </div>
-        <div class="mt-2 font-bold">Grand Total: ${grand.hrs.toFixed(2)} hrs · $${money(grand.price)}</div>
-      </div>
-
-      <div class="card p-4">
-        <div class="flex justify-between items-center mb-2">
-          <h2 class="font-bold text-lg">Work Plan</h2>
-          <button class="btn-secondary tap px-3 text-sm" data-goto-step="3">Edit</button>
-        </div>
-        <div class="text-sm space-y-1 opacity-90">
-          <div>Crew: ${esc(wp.crewSize) || '—'}</div>
-          <div>Equipment: ${esc(equipmentSummary) || '—'}</div>
-          <div>Permits/Access: ${[...wp.permitsChecklist, wp.permitsCustom].filter(Boolean).map(esc).join(', ') || '—'}</div>
-        </div>
-      </div>
-
-      <div class="card p-4">
-        <h2 class="font-bold text-lg mb-2">Site Map &amp; GPS Reference</h2>
-        <div class="text-sm space-y-1 opacity-90 mb-3">
-          ${state.trees.map((t, i) => `<div>${i + 1}. ${esc(t.species) || 'Unspecified'} — ${t.gps.lat && t.gps.lng ? `${esc(t.gps.lat)}, ${esc(t.gps.lng)}${t.gps.accuracy ? ` (±${Math.round(t.gps.accuracy)}m)` : ''}` : 'no GPS captured'}</div>`).join('') || '<div class="opacity-60">No trees added.</div>'}
-        </div>
-        <div id="siteMapHolder" class="flex justify-center overflow-hidden rounded-xl border-2 border-brand-200"></div>
-        <p class="text-xs opacity-60 mt-2">Relative positions derived from captured GPS — not an absolute surveyed map.</p>
-      </div>
-
-      <div class="card p-4 space-y-3">
-        <h2 class="font-bold text-lg">Generate Deliverables</h2>
-        <p class="text-sm opacity-70">Produces a PDF report, and a zipped package containing the PDF, a GeoJSON + CSV coordinate file, and a <code>Photos/</code> folder of original &amp; marked-up tree photos labeled by tree number (1, 1a, 1b…) — ready for SingleOps proposal entry.</p>
-        <button class="btn-primary w-full tap" id="btnPdf">📄 Download PDF Report</button>
-        <button class="btn-primary w-full tap" id="btnZip">🗂 Download Complete Package (.zip)</button>
-        <div id="exportLinks" class="text-sm space-y-1"></div>
-      </div>
-
-      <button class="btn-secondary w-full tap" id="btnNewInspection">↺ Start New Inspection</button>
-    </div>`;
-}
-
-function updateTotals() {
-  state.trees.forEach(t => {
-    const el = document.getElementById('subtotal-' + t.id);
-    if (el) { const tt = treeTotals(t); el.textContent = `${tt.hrs.toFixed(2)} hrs · $${money(tt.price)}`; }
-    t.tasks.forEach(task => {
-      const taskEl = document.getElementById('task-subtotal-' + task.id);
-      if (taskEl) { const tt = taskTotals(task); taskEl.textContent = `${tt.hrs.toFixed(2)} hrs · $${money(tt.price)}`; }
-    });
-  });
-  const grandEl = document.getElementById('grand-total-step2');
-  if (grandEl) { const g = grandTotals(); grandEl.textContent = `${g.hrs.toFixed(2)} hrs · $${money(g.price)}`; }
-}
-
-/* =========================== Photo capture + downscale =========================== */
-function loadImageFromFile(file) {
-  return new Promise((resolve, reject) => {
+function fileToDataUrl(file){
+  return new Promise((resolve,reject)=>{
     const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = reader.result;
-    };
+    reader.onload = ()=>resolve(reader.result);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
-function downscale(img, maxDim = 1800, quality = 0.85) {
-  let { width, height } = img;
-  if (width > maxDim || height > maxDim) {
-    if (width >= height) { height = Math.round(height * maxDim / width); width = maxDim; }
-    else { width = Math.round(width * maxDim / height); height = maxDim; }
+function dataUrlToBlob(dataUrl){
+  const [meta,b64] = dataUrl.split(',');
+  const mime = (meta.match(/:(.*?);/)||[,'image/jpeg'])[1];
+  const bin = atob(b64); const arr = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new Blob([arr], {type:mime});
+}
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 8000);
+}
+function csvEsc(v){ v=(v==null?'':String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function money(n){ return '$'+(Number(n)||0).toFixed(2); }
+
+/* ===================== Step scaffolding ===================== */
+const STEPS = ['Client & Site', 'Trees', 'Logistics', 'Generate'];
+const appRoot = document.getElementById('appRoot');
+const backBtn = document.getElementById('backBtn');
+const nextBtn = document.getElementById('nextBtn');
+
+function render(){
+  document.getElementById('jobSubtitle').textContent = state.client.name
+    ? `${state.client.name} — ${(state.client.city||'').toUpperCase()}` : 'New Job';
+  renderStepper();
+  if(state.step===0) renderStepClient();
+  else if(state.step===1) renderStepTrees();
+  else if(state.step===2) renderStepLogistics();
+  else renderStepGenerate();
+  backBtn.disabled = state.step===0;
+  nextBtn.textContent = state.step===STEPS.length-1 ? 'Done' : 'Next';
+  nextBtn.style.visibility = state.step===STEPS.length-1 ? 'hidden' : 'visible';
+  persist();
+}
+function renderStepper(){
+  const nav = document.getElementById('stepperNav');
+  nav.innerHTML = STEPS.map((s,i)=>`
+    <button data-step="${i}" class="px-2.5 py-1 rounded-full ${i===state.step?'bg-white text-brand font-semibold':'bg-white/10 text-white/80'}">${i+1}. ${esc(s)}</button>
+  `).join('<span class="text-white/40">›</span>');
+  const dots = document.getElementById('stepDots');
+  dots.innerHTML = STEPS.map((_,i)=>`<span class="step-dot ${i===state.step?'active':''}"></span>`).join('');
+}
+
+/* ===================== Step 0: Client & Site Info (no header) ===================== */
+function renderStepClient(){
+  const c = state.client;
+  appRoot.innerHTML = `
+  <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+    <div class="grid grid-cols-2 gap-3">
+      <label class="col-span-2 text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">SingleOps Lead #</span>
+        <input data-bind="client.leadNum" value="${esc(c.leadNum)}" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label class="col-span-2 text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">City</span>
+        <input data-bind="client.city" value="${esc(c.city)}" class="w-full border border-slate-300 rounded-lg px-3 py-2 uppercase" placeholder="Auto-formatted in ALL CAPS on export"></label>
+      <label class="col-span-2 text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Client Name</span>
+        <input data-bind="client.name" value="${esc(c.name)}" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label class="text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Phone Number</span>
+        <input data-bind="client.phone" value="${esc(c.phone)}" type="tel" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label class="text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Email</span>
+        <input data-bind="client.email" value="${esc(c.email)}" type="email" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label class="text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Date</span>
+        <input data-bind="client.date" value="${esc(c.date)}" type="date" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label class="text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Arborist Name</span>
+        <input data-bind="client.arborist" value="${esc(c.arborist)}" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+    </div>
+  </div>`;
+}
+
+/* ===================== Step 1: Tree-by-tree inventory ===================== */
+function photoSlotHtml(photo, treeIdx, taskIdx, role){
+  const hasPhoto = photo && (photo.editedDataUrl || photo.originalDataUrl);
+  const src = hasPhoto ? (photo.editedDataUrl || photo.originalDataUrl) : '';
+  return `
+  <div class="space-y-1.5">
+    ${hasPhoto ? `<img src="${src}" class="photo-thumb">` : `<div class="photo-thumb flex items-center justify-center text-slate-400 text-xs border border-dashed border-slate-300">No photo</div>`}
+    <div class="flex gap-2">
+      <label class="flex-1 text-center text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-lg py-2 cursor-pointer">
+        ${hasPhoto ? 'Replace Photo' : 'Take / Upload Photo'}
+        <input type="file" accept="image/*" capture="environment" class="hidden" data-photo-input data-tree-idx="${treeIdx}" ${taskIdx!=null?`data-task-idx="${taskIdx}"`:''} data-role="${role}">
+      </label>
+      <button class="flex-1 text-xs font-medium bg-brand-light text-brand-dark rounded-lg py-2 disabled:opacity-40" ${hasPhoto?'':'disabled'}
+        data-photo-edit data-tree-idx="${treeIdx}" ${taskIdx!=null?`data-task-idx="${taskIdx}"`:''} data-role="${role}">Edit / Annotate</button>
+    </div>
+  </div>`;
+}
+
+function renderStepTrees(){
+  const parts = state.trees.map((tree,ti)=>{
+    const subtotal = (Number(tree.price)||0) + tree.tasks.reduce((s,t)=>s+(Number(t.price)||0),0);
+    return `
+    <div class="bg-white rounded-xl border border-slate-200 mb-3 overflow-hidden" data-tree-card="${ti}">
+      <button class="w-full flex items-center justify-between px-4 py-3 bg-slate-50" data-tree-toggle="${ti}">
+        <span class="font-semibold text-sm">Tree ${ti+1}${tree.species?': '+esc(tree.species):''}</span>
+        <span class="flex items-center gap-2 text-xs text-slate-500">${money(subtotal)} <svg class="w-4 h-4 transition-transform ${tree.open?'rotate-180':''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+      </button>
+      ${tree.open ? `
+      <div class="p-4 space-y-4">
+        ${photoSlotHtml(tree.mainPhoto, ti, null, 'main')}
+
+        <div>
+          <span class="block text-xs font-medium text-slate-500 mb-1">GPS Location</span>
+          <div class="grid grid-cols-3 gap-2">
+            <input data-bind="trees.${ti}.gps.lat" value="${esc(tree.gps.lat)}" placeholder="Latitude" class="border border-slate-300 rounded-lg px-2 py-2 text-sm">
+            <input data-bind="trees.${ti}.gps.lng" value="${esc(tree.gps.lng)}" placeholder="Longitude" class="border border-slate-300 rounded-lg px-2 py-2 text-sm">
+            <input data-bind="trees.${ti}.gps.accuracy" value="${esc(tree.gps.accuracy)}" placeholder="± meters" class="border border-slate-300 rounded-lg px-2 py-2 text-sm">
+          </div>
+          <div class="flex gap-2 mt-2">
+            <button class="flex-1 text-xs font-medium bg-brand text-white rounded-lg py-2" data-gps-capture="${ti}">📍 Capture GPS</button>
+            ${(tree.gps.lat&&tree.gps.lng) ? `<a class="text-xs font-medium bg-slate-100 rounded-lg py-2 px-3 flex items-center" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${encodeURIComponent(tree.gps.lat)},${encodeURIComponent(tree.gps.lng)}">View on Map</a>` : ''}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <label class="col-span-2 text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Tree Type / Species</span>
+            <input data-bind="trees.${ti}.species" value="${esc(tree.species)}" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+          <label class="text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Size (DBH, in)</span>
+            <input data-bind="trees.${ti}.dbh" value="${esc(tree.dbh)}" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+          <label class="text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Tree Price</span>
+            <input data-bind="trees.${ti}.price" value="${esc(tree.price)}" type="number" step="0.01" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+          <label class="col-span-2 text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Specific Location on Landscape</span>
+            <input data-bind="trees.${ti}.location" value="${esc(tree.location)}" class="w-full border border-slate-300 rounded-lg px-3 py-2" placeholder="e.g. front yard, left of driveway"></label>
+        </div>
+
+        <div class="border-t border-slate-200 pt-3">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-semibold">Work Tasks</span>
+            <button class="text-xs font-medium bg-brand text-white rounded-lg px-3 py-1.5" data-add-task="${ti}">+ Add Task</button>
+          </div>
+          <div class="space-y-3">
+            ${tree.tasks.map((task,tj)=>renderTaskCard(tree,ti,task,tj)).join('')}
+          </div>
+        </div>
+
+        <button class="w-full text-xs font-medium text-red-600 bg-red-50 rounded-lg py-2" data-remove-tree="${ti}">Remove Tree ${ti+1}</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+
+  appRoot.innerHTML = parts + `
+    <button class="w-full bg-brand text-white font-semibold rounded-xl py-3 mt-2" id="addTreeBtn">+ Add Tree</button>
+  `;
+}
+
+function renderTaskCard(tree, ti, task, tj){
+  const label = String(ti+1) + String.fromCharCode(97+tj);
+  return `
+  <div class="bg-slate-50 rounded-lg p-3 space-y-2.5" data-task-card="${tj}">
+    <div class="flex items-center justify-between">
+      <span class="text-xs font-semibold text-slate-500">Task ${label}</span>
+      <button class="text-xs text-red-600" data-remove-task="${ti}" data-remove-task-idx="${tj}">Remove</button>
+    </div>
+    <select data-bind="trees.${ti}.tasks.${tj}.type" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+      ${WORK_TASK_TYPES.map(opt=>`<option value="${esc(opt)}" ${task.type===opt?'selected':''}>${esc(opt)}</option>`).join('')}
+    </select>
+    ${task.type==='Other (specify)' ? `<input data-bind="trees.${ti}.tasks.${tj}.customType" value="${esc(task.customType)}" placeholder="Specify task" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">` : ''}
+    <textarea data-bind="trees.${ti}.tasks.${tj}.details" rows="2" placeholder="Task details" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">${esc(task.details)}</textarea>
+    <div class="grid grid-cols-2 gap-2">
+      <label class="text-xs"><span class="block text-slate-500 mb-1">Est. Man-Hours</span>
+        <input data-bind="trees.${ti}.tasks.${tj}.hours" value="${esc(task.hours)}" type="number" step="0.25" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"></label>
+      <label class="text-xs"><span class="block text-slate-500 mb-1">Task Price</span>
+        <input data-bind="trees.${ti}.tasks.${tj}.price" value="${esc(task.price)}" type="number" step="0.01" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"></label>
+    </div>
+    <div class="flex gap-4 text-xs">
+      <label class="flex items-center gap-1.5"><input type="checkbox" data-bind="trees.${ti}.tasks.${tj}.splitJob" ${task.splitJob?'checked':''}> Split Job</label>
+      <label class="flex items-center gap-1.5"><input type="checkbox" data-bind="trees.${ti}.tasks.${tj}.splitVisit" ${task.splitVisit?'checked':''}> Split Visit</label>
+    </div>
+    ${photoSlotHtml(task.photo, ti, tj, 'task')}
+  </div>`;
+}
+
+/* ===================== Step 2: Global Work Plan & Logistics ===================== */
+function renderStepLogistics(){
+  const eq = state.equipment, ap = state.accessPermits, n = state.notes;
+  appRoot.innerHTML = `
+  <div class="space-y-4">
+    <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+      <h2 class="text-sm font-bold text-slate-700">Required Equipment</h2>
+      <div class="grid grid-cols-2 gap-3 text-sm">
+        <label><span class="block text-xs font-medium text-slate-500 mb-1">Bucket Truck</span>
+          <select data-bind="equipment.bucketTruck" class="w-full border border-slate-300 rounded-lg px-2 py-2">
+            ${['None',"60'","75'"].map(o=>`<option ${eq.bucketTruck===o?'selected':''}>${o}</option>`).join('')}
+          </select></label>
+        <label><span class="block text-xs font-medium text-slate-500 mb-1">Chip Truck</span>
+          <select data-bind="equipment.chipTruck" class="w-full border border-slate-300 rounded-lg px-2 py-2">
+            ${['None','Small','Standard'].map(o=>`<option ${eq.chipTruck===o?'selected':''}>${o}</option>`).join('')}
+          </select></label>
+        <label class="col-span-2"><span class="block text-xs font-medium text-slate-500 mb-1">Extra Chip Truck</span>
+          <select data-bind="equipment.extraChipTruck" class="w-full border border-slate-300 rounded-lg px-2 py-2">
+            ${['No','Yes - Small','Yes - Standard'].map(o=>`<option ${eq.extraChipTruck===o?'selected':''}>${o}</option>`).join('')}
+          </select></label>
+        <label><span class="block text-xs font-medium text-slate-500 mb-1">Stump Grinder</span>
+          <select data-bind="equipment.stumpGrinder" class="w-full border border-slate-300 rounded-lg px-2 py-2">
+            ${['None','Rayco','Timber'].map(o=>`<option ${eq.stumpGrinder===o?'selected':''}>${o}</option>`).join('')}
+          </select></label>
+        <label><span class="block text-xs font-medium text-slate-500 mb-1">Mini Loader</span>
+          <select data-bind="equipment.miniLoader" class="w-full border border-slate-300 rounded-lg px-2 py-2">
+            ${['None','ML1','ML2'].map(o=>`<option ${eq.miniLoader===o?'selected':''}>${o}</option>`).join('')}
+          </select></label>
+      </div>
+
+      <div class="border-t border-slate-200 pt-3 space-y-2">
+        <label class="flex items-center gap-2 text-sm font-medium"><input type="checkbox" data-bind="equipment.crane.needed" ${eq.crane.needed?'checked':''}> Crane Needed</label>
+        ${eq.crane.needed ? `<div class="grid grid-cols-2 gap-2">
+          <input data-bind="equipment.crane.spec" value="${esc(eq.crane.spec)}" placeholder="Crane type/spec" class="border border-slate-300 rounded-lg px-2 py-2 text-sm">
+          <input data-bind="equipment.crane.price" value="${esc(eq.crane.price)}" type="number" step="0.01" placeholder="Crane Price" class="border border-slate-300 rounded-lg px-2 py-2 text-sm">
+        </div>` : ''}
+      </div>
+      <div class="pt-1 space-y-2">
+        <label class="flex items-center gap-2 text-sm font-medium"><input type="checkbox" data-bind="equipment.spyderLift.needed" ${eq.spyderLift.needed?'checked':''}> Spyder Lift Needed</label>
+        ${eq.spyderLift.needed ? `<div class="grid grid-cols-2 gap-2">
+          <input data-bind="equipment.spyderLift.spec" value="${esc(eq.spyderLift.spec)}" placeholder="Spyder lift spec" class="border border-slate-300 rounded-lg px-2 py-2 text-sm">
+          <input data-bind="equipment.spyderLift.price" value="${esc(eq.spyderLift.price)}" type="number" step="0.01" placeholder="Spyder Lift Price" class="border border-slate-300 rounded-lg px-2 py-2 text-sm">
+        </div>` : ''}
+      </div>
+      <label class="block text-sm pt-1"><span class="block text-xs font-medium text-slate-500 mb-1">Crew Size</span>
+        <input data-bind="client.crewSize" value="${esc(state.client.crewSize)}" type="number" class="w-32 border border-slate-300 rounded-lg px-3 py-2"></label>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+      <h2 class="text-sm font-bold text-slate-700">Safety Concerns</h2>
+      <p class="text-xs text-slate-500">Specify: (1) which tree is conflicting with a wire, (2) the class of conductor, and (3) whether PEPCO support needs to be a wire drop, shut-off, or cleared.</p>
+      <textarea data-bind="safety" rows="4" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">${esc(state.safety)}</textarea>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+      <h2 class="text-sm font-bold text-slate-700">Access & Permits</h2>
+      <div class="space-y-1.5 text-sm">
+        ${ACCESS_ITEMS.map(([k,label])=>`
+          <label class="flex items-center gap-2"><input type="checkbox" data-bind="accessPermits.standard.${k}" ${ap.standard[k]?'checked':''}> ${esc(label)}</label>
+        `).join('')}
+        ${ap.custom.map((c,ci)=>`
+          <div class="flex items-center gap-2">
+            <input type="checkbox" data-custom-access-check="${ci}" ${c.checked?'checked':''}>
+            <input data-custom-access-label="${ci}" value="${esc(c.label)}" placeholder="Custom item" class="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm">
+            <button class="text-xs text-red-600" data-remove-custom-access="${ci}">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="text-xs font-medium text-brand" id="addCustomAccessBtn">+ Add custom item</button>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+      <h2 class="text-sm font-bold text-slate-700">Notes</h2>
+      <label class="block text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Crew Notes</span>
+        <textarea data-bind="notes.crew" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2">${esc(n.crew)}</textarea></label>
+      <label class="block text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Client Notes</span>
+        <textarea data-bind="notes.client" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2">${esc(n.client)}</textarea></label>
+      <label class="block text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Internal Notes</span>
+        <textarea data-bind="notes.internal" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2">${esc(n.internal)}</textarea></label>
+      <label class="block text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Scheduling Concerns (incl. Traffic Control)</span>
+        <textarea data-bind="notes.scheduling" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2">${esc(n.scheduling)}</textarea></label>
+    </div>
+  </div>`;
+}
+
+/* ===================== Step 3: Generate ===================== */
+function renderStepGenerate(){
+  let total = 0;
+  state.trees.forEach(t=>{ total += Number(t.price)||0; t.tasks.forEach(tk=> total += Number(tk.price)||0); });
+  if(state.equipment.crane.needed) total += Number(state.equipment.crane.price)||0;
+  if(state.equipment.spyderLift.needed) total += Number(state.equipment.spyderLift.price)||0;
+  appRoot.innerHTML = `
+  <div class="bg-white rounded-xl border border-slate-200 p-5 space-y-4 text-center">
+    <h2 class="text-base font-bold text-slate-700">Review & Generate Output Package</h2>
+    <p class="text-sm text-slate-500">${state.trees.length} tree(s) · Grand Total <span class="font-bold text-brand">${money(total)}</span></p>
+    <button id="genZipBtn" class="w-full bg-brand text-white font-bold rounded-xl py-3.5">Generate &amp; Download ZIP Bundle</button>
+    <div class="grid grid-cols-2 gap-2 pt-1">
+      <button id="genPdfBtn" class="bg-slate-100 text-slate-700 text-sm font-medium rounded-lg py-2.5">PDF Report only</button>
+      <button id="genCardBtn" class="bg-slate-100 text-slate-700 text-sm font-medium rounded-lg py-2.5">Notecard PDF only</button>
+    </div>
+    <p class="text-xs text-slate-400 pt-2">ZIP includes: main report PDF, 5x7 notecard PDF, GeoJSON + CSV coordinates, and a media folder of original + annotated photos.</p>
+  </div>`;
+}
+
+/* ===================== Event delegation ===================== */
+appRoot.addEventListener('input', handleBind);
+appRoot.addEventListener('change', handleBind);
+function handleBind(e){
+  const path = e.target.getAttribute('data-bind');
+  if(!path) return;
+  const val = e.target.type==='checkbox' ? e.target.checked : e.target.value;
+  setPath(state, path, val);
+  persist();
+  if(e.target.type==='checkbox' && (path.startsWith('equipment.crane.needed')||path.startsWith('equipment.spyderLift.needed'))){
+    renderStepLogistics();
   }
-  const canvas = document.createElement('canvas');
-  canvas.width = width; canvas.height = height;
-  canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-  return { dataUrl: canvas.toDataURL('image/jpeg', quality), width, height };
+  if(path.includes('.type') && e.target.tagName==='SELECT'){
+    renderStepTrees();
+  }
 }
 
-let pendingPhotoTarget = null;
-function handlePhotoFile(targetStr, file) {
-  if (!file) return;
-  loadImageFromFile(file).then(img => {
-    const { dataUrl, width, height } = downscale(img);
-    const photo = { id: uid(), originalDataUrl: dataUrl, markupDataUrl: null, hasMarkup: false, width, height };
-    getPhotoSlot(parsePhotoTarget(targetStr)).set(photo);
-    schedulePersist();
-    renderAll();
-    openMarkupModal(targetStr);
-  }).catch(() => flashToast('Could not read photo'));
+document.getElementById('stepperNav').addEventListener('click', e=>{
+  const btn = e.target.closest('[data-step]'); if(!btn) return;
+  state.step = Number(btn.dataset.step); render();
+});
+backBtn.addEventListener('click', ()=>{ if(state.step>0){ state.step--; render(); } });
+nextBtn.addEventListener('click', ()=>{ if(state.step<STEPS.length-1){ state.step++; render(); } });
+document.getElementById('newJobBtn').addEventListener('click', ()=>{
+  if(confirm('Start a new job? This clears all current data.')){ state = newState(); uidCounter=1; saveState(); render(); }
+});
+
+appRoot.addEventListener('click', async e=>{
+  const toggle = e.target.closest('[data-tree-toggle]');
+  if(toggle){ const i=Number(toggle.dataset.treeToggle); state.trees[i].open = !state.trees[i].open; renderStepTrees(); return; }
+
+  if(e.target.id==='addTreeBtn'){ state.trees.push(newTree()); renderStepTrees(); persist(); return; }
+
+  const rmTree = e.target.closest('[data-remove-tree]');
+  if(rmTree){ if(confirm('Remove this tree and all its tasks?')){ state.trees.splice(Number(rmTree.dataset.removeTree),1); renderStepTrees(); persist(); } return; }
+
+  const addTask = e.target.closest('[data-add-task]');
+  if(addTask){ state.trees[Number(addTask.dataset.addTask)].tasks.push(newTask()); renderStepTrees(); persist(); return; }
+
+  const rmTask = e.target.closest('[data-remove-task]');
+  if(rmTask){ const ti=Number(rmTask.dataset.removeTask), tj=Number(rmTask.dataset.removeTaskIdx); state.trees[ti].tasks.splice(tj,1); renderStepTrees(); persist(); return; }
+
+  const gps = e.target.closest('[data-gps-capture]');
+  if(gps){
+    const ti = Number(gps.dataset.gpsCapture);
+    if(!navigator.geolocation){ toast('Geolocation not available - enter manually.'); return; }
+    gps.textContent = 'Capturing...';
+    navigator.geolocation.getCurrentPosition(pos=>{
+      state.trees[ti].gps = { lat:pos.coords.latitude.toFixed(6), lng:pos.coords.longitude.toFixed(6), accuracy:Math.round(pos.coords.accuracy) };
+      renderStepTrees(); persist(); toast('GPS captured.');
+    }, err=>{ toast('GPS failed: '+err.message+' - enter manually.'); renderStepTrees(); }, {enableHighAccuracy:true, timeout:10000});
+    return;
+  }
+
+  const photoEdit = e.target.closest('[data-photo-edit]');
+  if(photoEdit){ openEditorFromEl(photoEdit); return; }
+
+  if(e.target.id==='addCustomAccessBtn'){ state.accessPermits.custom.push({label:'', checked:false}); renderStepLogistics(); persist(); return; }
+  const rmCustom = e.target.closest('[data-remove-custom-access]');
+  if(rmCustom){ state.accessPermits.custom.splice(Number(rmCustom.dataset.removeCustomAccess),1); renderStepLogistics(); persist(); return; }
+
+  if(e.target.id==='genZipBtn'){ await generateAndDownloadZip(e.target); return; }
+  if(e.target.id==='genPdfBtn'){ await downloadMainPdfOnly(e.target); return; }
+  if(e.target.id==='genCardBtn'){ downloadNotecardOnly(); return; }
+});
+
+appRoot.addEventListener('change', async e=>{
+  const fileInput = e.target.closest('[data-photo-input]');
+  if(fileInput && fileInput.files && fileInput.files[0]){
+    const dataUrl = await fileToDataUrl(fileInput.files[0]);
+    const ti = Number(fileInput.dataset.treeIdx);
+    const role = fileInput.dataset.role;
+    const photoObj = { originalDataUrl: dataUrl, editedDataUrl: null, shapes: [] };
+    if(role==='main'){ state.trees[ti].mainPhoto = photoObj; }
+    else { const tj = Number(fileInput.dataset.taskIdx); state.trees[ti].tasks[tj].photo = photoObj; }
+    renderStepTrees(); persist();
+    return;
+  }
+  const customLabel = e.target.closest('[data-custom-access-label]');
+  if(customLabel){ state.accessPermits.custom[Number(customLabel.dataset.customAccessLabel)].label = customLabel.value; persist(); return; }
+  const customCheck = e.target.closest('[data-custom-access-check]');
+  if(customCheck){ state.accessPermits.custom[Number(customCheck.dataset.customAccessCheck)].checked = customCheck.checked; persist(); return; }
+});
+
+/* ===================== Photo Doodle Editor ===================== */
+const edModal = document.getElementById('editorModal');
+const edCanvas = document.getElementById('editorCanvas');
+const edCtx = edCanvas.getContext('2d');
+let ed = null; // current editor session
+let edTarget = null; // {treeIdx, taskIdx|null, role}
+
+function findPhoto(target){
+  const tree = state.trees[target.treeIdx];
+  return target.role==='main' ? tree.mainPhoto : tree.tasks[target.taskIdx].photo;
 }
 
-/* =========================== Markup canvas tool =========================== */
-const markup = {
-  target: null, baseImage: null, hadBaseMarkup: false,
-  strokes: [], current: null, tool: 'pen', color: '#ff2d2d', width: 6,
-  zoom: { scale: 1, tx: 0, ty: 0 }, activePointers: new Map(), pinchStart: null, drawing: false
-};
-
-function applyZoomTransform() {
-  const wrap = document.getElementById('markupZoomWrap');
-  wrap.style.transform = `translate(${markup.zoom.tx}px, ${markup.zoom.ty}px) scale(${markup.zoom.scale})`;
-}
-
-function openMarkupModal(targetStr) {
-  const target = parsePhotoTarget(targetStr);
-  const p = getPhotoSlot(target).get();
-  markup.target = targetStr; markup.strokes = []; markup.current = null;
-  markup.hadBaseMarkup = p.hasMarkup;
-  markup.zoom = { scale: 1, tx: 0, ty: 0 };
-  markup.activePointers.clear(); markup.pinchStart = null; markup.drawing = false;
-  applyZoomTransform();
-
+function openEditorFromEl(el){
+  edTarget = { treeIdx: Number(el.dataset.treeIdx), taskIdx: el.dataset.taskIdx!=null ? Number(el.dataset.taskIdx) : null, role: el.dataset.role };
+  const photo = findPhoto(edTarget);
+  if(!photo || !photo.originalDataUrl){ toast('No photo to edit yet.'); return; }
   const img = new Image();
-  img.onload = () => {
-    markup.baseImage = img;
-    const canvas = document.getElementById('markupCanvas');
-    canvas.width = p.width; canvas.height = p.height;
-    redrawMarkup();
-    document.getElementById('markupModal').classList.remove('hidden');
+  img.onload = ()=>{
+    edModal.classList.remove('hidden');
+    sizeEditorCanvas();
+    ed = {
+      img, scale:1, baseScale: Math.min(edCanvas.width/img.width, edCanvas.height/img.height),
+      panX:0, panY:0, tool:'pan', color: COLORS[0], arrowMode:false,
+      shapes: JSON.parse(JSON.stringify(photo.shapes||[])),
+      selectedId: null, activePointers: new Map(), drawShape:null, pinch:null, dragMove:null
+    };
+    buildSwatches();
+    setActiveTool('pan');
+    redrawEditor();
   };
-  img.src = p.hasMarkup ? p.markupDataUrl : p.originalDataUrl;
+  img.src = photo.originalDataUrl;
+}
+function sizeEditorCanvas(){
+  const wrap = document.getElementById('edCanvasWrap');
+  const dpr = window.devicePixelRatio || 1;
+  edCanvas.width = Math.round(wrap.clientWidth*dpr);
+  edCanvas.height = Math.round(wrap.clientHeight*dpr);
+  edCanvas.style.width = wrap.clientWidth+'px';
+  edCanvas.style.height = wrap.clientHeight+'px';
+}
+function buildSwatches(){
+  const row = document.getElementById('edSwatches');
+  row.innerHTML = COLORS.map(c=>`<button class="swatch" data-color="${c}" style="background:${c}" aria-pressed="${ed.color===c}"></button>`).join('');
+}
+document.getElementById('edSwatches').addEventListener('click', e=>{
+  const sw = e.target.closest('[data-color]'); if(!sw||!ed) return;
+  ed.color = sw.dataset.color;
+  buildSwatches();
+});
+document.getElementById('edArrowMode').addEventListener('change', e=>{ if(ed) ed.arrowMode = e.target.checked; });
 
-  renderMarkupToolbar();
+document.getElementById('edToolRow').addEventListener('click', e=>{
+  const btn = e.target.closest('[data-tool]'); if(!btn) return;
+  setActiveTool(btn.dataset.tool);
+});
+function setActiveTool(tool){
+  if(ed) ed.tool = tool;
+  document.querySelectorAll('#edToolRow [data-tool]').forEach(b=> b.setAttribute('aria-pressed', String(b.dataset.tool===tool)));
 }
 
-function renderMarkupToolbar() {
-  const tools = [['pen', '✏️ Pen'], ['arrow', '➡️ Arrow'], ['circle', '⭕ Circle'], ['magnify', '🔎 Magnify'], ['text', '🔤 Text']];
-  document.getElementById('markupTools').innerHTML = tools.map(([val, label]) =>
-    `<button type="button" class="chip ${markup.tool === val ? 'active' : ''}" data-markup-tool="${val}" style="color:white;border-color:white">${label}</button>`
-  ).join('');
-  const colors = ['#ff2d2d', '#ffd60a', '#00e0ff', '#ffffff'];
-  document.getElementById('markupColors').innerHTML = colors.map(c =>
-    `<button type="button" data-markup-color="${c}" style="background:${c};width:36px;height:36px;border-radius:50%;border:3px solid ${markup.color === c ? '#1A73E8' : 'rgba(255,255,255,.5)'}"></button>`
-  ).join('');
-  document.getElementById('markupWidth').value = markup.width;
+function eff(){ return ed.baseScale*ed.scale; }
+function canvasPointFromEvent(evt){
+  const rect = edCanvas.getBoundingClientRect();
+  return { cx: (evt.clientX-rect.left)*(edCanvas.width/rect.width), cy: (evt.clientY-rect.top)*(edCanvas.height/rect.height) };
+}
+function toImageSpace(cx,cy){
+  const e = eff();
+  return { x: (cx - edCanvas.width/2 - ed.panX)/e + ed.img.width/2, y: (cy - edCanvas.height/2 - ed.panY)/e + ed.img.height/2 };
 }
 
-function canvasPoint(evt) {
-  const canvas = document.getElementById('markupCanvas');
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  return [(evt.clientX - rect.left) * scaleX, (evt.clientY - rect.top) * scaleY];
+function redrawEditor(){
+  edCtx.setTransform(1,0,0,1,0,0);
+  edCtx.clearRect(0,0,edCanvas.width,edCanvas.height);
+  edCtx.fillStyle = '#111'; edCtx.fillRect(0,0,edCanvas.width,edCanvas.height);
+  const e = eff();
+  edCtx.save();
+  edCtx.translate(edCanvas.width/2+ed.panX, edCanvas.height/2+ed.panY);
+  edCtx.scale(e,e);
+  edCtx.drawImage(ed.img, -ed.img.width/2, -ed.img.height/2);
+  ed.shapes.forEach(s=>drawShape(s, s.id===ed.selectedId));
+  if(ed.drawShape) drawShape(ed.drawShape, false);
+  edCtx.restore();
+  document.getElementById('edDeleteBtn').disabled = ed.selectedId==null;
 }
-
-function drawStroke(ctx, s) {
-  ctx.strokeStyle = s.color; ctx.fillStyle = s.color; ctx.lineWidth = s.width;
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  if (s.tool === 'pen') {
-    ctx.beginPath();
-    s.points.forEach((pt, i) => i === 0 ? ctx.moveTo(pt[0], pt[1]) : ctx.lineTo(pt[0], pt[1]));
-    ctx.stroke();
-  } else if (s.tool === 'arrow') {
-    const [x1, y1, x2, y2] = [s.x1, s.y1, s.x2, s.y2];
-    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    const angle = Math.atan2(y2 - y1, x2 - x1);
-    const headLen = Math.max(14, s.width * 4);
-    ctx.beginPath();
-    ctx.moveTo(x2, y2);
-    ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 7), y2 - headLen * Math.sin(angle - Math.PI / 7));
-    ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 7), y2 - headLen * Math.sin(angle + Math.PI / 7));
-    ctx.closePath(); ctx.fill();
-  } else if (s.tool === 'circle') {
-    const cx = (s.x1 + s.x2) / 2, cy = (s.y1 + s.y2) / 2;
-    const rx = Math.abs(s.x2 - s.x1) / 2, ry = Math.abs(s.y2 - s.y1) / 2;
-    ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2); ctx.stroke();
-  } else if (s.tool === 'magnify') {
-    const cx = (s.x1 + s.x2) / 2, cy = (s.y1 + s.y2) / 2;
-    const r = Math.max(Math.hypot(s.x2 - s.x1, s.y2 - s.y1) / 2, 14);
-    const zoomFactor = 2.5;
-    const srcR = r / zoomFactor;
-    if (markup.baseImage) {
-      ctx.save();
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
-      ctx.drawImage(markup.baseImage, cx - srcR, cy - srcR, srcR * 2, srcR * 2, cx - r, cy - r, r * 2, r * 2);
-      ctx.restore();
-    }
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.lineWidth = Math.max(s.width, 3); ctx.stroke();
-  } else if (s.tool === 'text') {
-    ctx.font = `bold ${Math.max(18, s.width * 4)}px sans-serif`;
-    ctx.textBaseline = 'top';
-    ctx.fillText(s.text, s.x, s.y);
+function drawShape(s, selected){
+  edCtx.save();
+  if(s.type==='freehand'){
+    edCtx.strokeStyle = s.color; edCtx.lineWidth = s.width; edCtx.lineJoin='round'; edCtx.lineCap='round';
+    edCtx.beginPath();
+    (s.points||[]).forEach((p,i)=> i===0?edCtx.moveTo(p.x,p.y):edCtx.lineTo(p.x,p.y));
+    edCtx.stroke();
+  } else if(s.type==='arrow'){
+    edCtx.strokeStyle = s.color; edCtx.fillStyle = s.color; edCtx.lineWidth = s.width; edCtx.lineCap='round';
+    edCtx.beginPath(); edCtx.moveTo(s.x1,s.y1); edCtx.lineTo(s.x2,s.y2); edCtx.stroke();
+    const ang = Math.atan2(s.y2-s.y1, s.x2-s.x1); const head = s.width*4+10;
+    edCtx.beginPath();
+    edCtx.moveTo(s.x2, s.y2);
+    edCtx.lineTo(s.x2 - head*Math.cos(ang-Math.PI/7), s.y2 - head*Math.sin(ang-Math.PI/7));
+    edCtx.lineTo(s.x2 - head*Math.cos(ang+Math.PI/7), s.y2 - head*Math.sin(ang+Math.PI/7));
+    edCtx.closePath(); edCtx.fill();
+  } else if(s.type==='text'){
+    edCtx.fillStyle = s.color; edCtx.font = 'bold '+s.fontSize+'px Arial, sans-serif'; edCtx.textBaseline='top';
+    edCtx.fillText(s.text, s.x, s.y);
+  } else if(s.type==='circle'){
+    edCtx.save();
+    edCtx.beginPath(); edCtx.arc(s.x, s.y, s.r, 0, Math.PI*2); edCtx.clip();
+    edCtx.translate(s.x, s.y); edCtx.scale(s.mag, s.mag); edCtx.translate(-s.x, -s.y);
+    edCtx.drawImage(ed.img, -ed.img.width/2, -ed.img.height/2);
+    edCtx.restore();
+    edCtx.strokeStyle = s.color; edCtx.lineWidth = Math.max(2, s.r*0.03);
+    edCtx.beginPath(); edCtx.arc(s.x, s.y, s.r, 0, Math.PI*2); edCtx.stroke();
   }
+  if(selected){
+    edCtx.strokeStyle = '#1A73E8'; edCtx.setLineDash([6/eff(),4/eff()]); edCtx.lineWidth = 2/eff();
+    const b = shapeBounds(s);
+    edCtx.strokeRect(b.x-6/eff(), b.y-6/eff(), b.w+12/eff(), b.h+12/eff());
+    edCtx.setLineDash([]);
+  }
+  edCtx.restore();
+}
+function shapeBounds(s){
+  if(s.type==='text'){ return { x:s.x, y:s.y, w: s.text.length*s.fontSize*0.55, h: s.fontSize }; }
+  if(s.type==='circle'){ return { x:s.x-s.r, y:s.y-s.r, w:s.r*2, h:s.r*2 }; }
+  if(s.type==='arrow'){ return { x:Math.min(s.x1,s.x2), y:Math.min(s.y1,s.y2), w:Math.abs(s.x2-s.x1)||1, h:Math.abs(s.y2-s.y1)||1 }; }
+  const xs = s.points.map(p=>p.x), ys = s.points.map(p=>p.y);
+  return { x:Math.min(...xs), y:Math.min(...ys), w:Math.max(...xs)-Math.min(...xs)||1, h:Math.max(...ys)-Math.min(...ys)||1 };
+}
+function hitTest(ix,iy){
+  const tol = 14/eff();
+  for(let i=ed.shapes.length-1;i>=0;i--){
+    const s = ed.shapes[i];
+    if(s.type==='text'){ const b=shapeBounds(s); if(ix>=b.x-tol&&ix<=b.x+b.w+tol&&iy>=b.y-tol&&iy<=b.y+b.h+tol) return s; }
+    else if(s.type==='circle'){ if(Math.hypot(ix-s.x, iy-s.y) <= s.r+tol) return s; }
+    else if(s.type==='arrow'){ if(distToSeg(ix,iy,s.x1,s.y1,s.x2,s.y2) <= tol+s.width) return s; }
+    else if(s.type==='freehand'){ for(let j=0;j<s.points.length-1;j++){ if(distToSeg(ix,iy,s.points[j].x,s.points[j].y,s.points[j+1].x,s.points[j+1].y) <= tol+s.width) return s; } }
+  }
+  return null;
+}
+function distToSeg(px,py,x1,y1,x2,y2){
+  const dx=x2-x1, dy=y2-y1; const len2 = dx*dx+dy*dy;
+  let t = len2 ? ((px-x1)*dx+(py-y1)*dy)/len2 : 0; t = Math.max(0,Math.min(1,t));
+  const cx=x1+t*dx, cy=y1+t*dy; return Math.hypot(px-cx,py-cy);
+}
+function moveShapeBy(s, dx, dy){
+  if(s.type==='text'||s.type==='circle'){ s.x+=dx; s.y+=dy; }
+  else if(s.type==='arrow'){ s.x1+=dx; s.y1+=dy; s.x2+=dx; s.y2+=dy; }
+  else if(s.type==='freehand'){ s.points.forEach(p=>{ p.x+=dx; p.y+=dy; }); }
 }
 
-function redrawMarkup() {
-  const canvas = document.getElementById('markupCanvas');
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (markup.baseImage) ctx.drawImage(markup.baseImage, 0, 0, canvas.width, canvas.height);
-  markup.strokes.forEach(s => drawStroke(ctx, s));
-  if (markup.current) drawStroke(ctx, markup.current);
-}
-
-function wireMarkupCanvas() {
-  const canvas = document.getElementById('markupCanvas');
-
-  canvas.addEventListener('pointerdown', e => {
-    markup.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    if (markup.activePointers.size === 2) {
-      markup.drawing = false; markup.current = null; redrawMarkup();
-      const pts = [...markup.activePointers.values()];
-      const wrap = document.getElementById('markupZoomWrap');
-      const viewport = document.getElementById('markupViewport');
-      const viewportRect = viewport.getBoundingClientRect();
-      const postRect = wrap.getBoundingClientRect();
-      const staticLeft = postRect.left - viewportRect.left - markup.zoom.tx;
-      const staticTop = postRect.top - viewportRect.top - markup.zoom.ty;
-      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
-      markup.pinchStart = {
-        dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
-        scale: markup.zoom.scale, viewportRect, staticLeft, staticTop,
-        ax: (mid.x - viewportRect.left - staticLeft - markup.zoom.tx) / markup.zoom.scale,
-        ay: (mid.y - viewportRect.top - staticTop - markup.zoom.ty) / markup.zoom.scale
-      };
-      return;
-    }
-    if (markup.activePointers.size > 2 || markup.pinchStart) return;
-
-    const [x, y] = canvasPoint(e);
-    if (markup.tool === 'text') {
-      const txt = prompt('Enter label text:');
-      if (txt) {
-        markup.strokes.push({ tool: 'text', color: markup.color, width: markup.width, x, y, text: txt });
-        redrawMarkup();
+function pointersArr(){ return Array.from(ed.activePointers.values()); }
+edCanvas.addEventListener('pointerdown', e=>{
+  if(!ed) return;
+  edCanvas.setPointerCapture(e.pointerId);
+  const {cx,cy} = canvasPointFromEvent(e);
+  ed.activePointers.set(e.pointerId, {cx,cy});
+  if(ed.activePointers.size===2){
+    const [a,b] = pointersArr();
+    ed.pinch = { startDist: Math.hypot(a.cx-b.cx,a.cy-b.cy), startScale: ed.scale,
+      mid0: {cx:(a.cx+b.cx)/2, cy:(a.cy+b.cy)/2}, imgMid0: toImageSpace((a.cx+b.cx)/2,(a.cy+b.cy)/2) };
+    ed.dragMove = null; ed.drawShape = null;
+    return;
+  }
+  const img = toImageSpace(cx,cy);
+  if(ed.tool==='pan'){ ed.dragMove = { mode:'pan', startCx:cx, startCy:cy, startPanX:ed.panX, startPanY:ed.panY }; }
+  else if(ed.tool==='select'){
+    const hit = hitTest(img.x, img.y);
+    ed.selectedId = hit ? hit.id : null;
+    if(hit){ ed.dragMove = { mode:'moveShape', shape:hit, lastImg:img }; }
+    redrawEditor();
+  }
+  else if(ed.tool==='draw'){
+    const id = 'sh'+Date.now()+Math.random();
+    if(ed.arrowMode){ ed.drawShape = { id, type:'arrow', x1:img.x, y1:img.y, x2:img.x, y2:img.y, color:ed.color, width: Math.max(3, ed.img.width*0.004) }; }
+    else { ed.drawShape = { id, type:'freehand', points:[{x:img.x,y:img.y}], color:ed.color, width: Math.max(3, ed.img.width*0.004) }; }
+  }
+  else if(ed.tool==='text'){ ed.dragMove = { mode:'tap', startCx:cx, startCy:cy }; }
+  else if(ed.tool==='circle'){ ed.dragMove = { mode:'tap', startCx:cx, startCy:cy }; }
+});
+edCanvas.addEventListener('pointermove', e=>{
+  if(!ed || !ed.activePointers.has(e.pointerId)) return;
+  const {cx,cy} = canvasPointFromEvent(e);
+  ed.activePointers.set(e.pointerId, {cx,cy});
+  if(ed.activePointers.size===2 && ed.pinch){
+    const [a,b] = pointersArr();
+    const dist = Math.hypot(a.cx-b.cx,a.cy-b.cy);
+    const newScale = Math.max(0.3, Math.min(6, ed.pinch.startScale * (dist/ed.pinch.startDist)));
+    const mid = {cx:(a.cx+b.cx)/2, cy:(a.cy+b.cy)/2};
+    const e2 = ed.baseScale*newScale;
+    ed.panX = mid.cx - edCanvas.width/2 - (ed.pinch.imgMid0.x - ed.img.width/2)*e2;
+    ed.panY = mid.cy - edCanvas.height/2 - (ed.pinch.imgMid0.y - ed.img.height/2)*e2;
+    ed.scale = newScale;
+    redrawEditor();
+    return;
+  }
+  if(ed.activePointers.size!==1 || !ed.dragMove) return;
+  if(ed.dragMove.mode==='pan'){
+    ed.panX = ed.dragMove.startPanX + (cx-ed.dragMove.startCx);
+    ed.panY = ed.dragMove.startPanY + (cy-ed.dragMove.startCy);
+    redrawEditor();
+  } else if(ed.dragMove.mode==='moveShape'){
+    const img = toImageSpace(cx,cy);
+    moveShapeBy(ed.dragMove.shape, img.x-ed.dragMove.lastImg.x, img.y-ed.dragMove.lastImg.y);
+    ed.dragMove.lastImg = img;
+    redrawEditor();
+  } else if(ed.dragMove.mode==='tap'){
+    if(Math.hypot(cx-ed.dragMove.startCx, cy-ed.dragMove.startCy) > 8) ed.dragMove.moved = true;
+  }
+  if(ed.drawShape){
+    const img = toImageSpace(cx,cy);
+    if(ed.drawShape.type==='freehand') ed.drawShape.points.push({x:img.x,y:img.y});
+    else { ed.drawShape.x2 = img.x; ed.drawShape.y2 = img.y; }
+    redrawEditor();
+  }
+});
+function endPointer(e){
+  if(!ed) return;
+  const had = ed.activePointers.has(e.pointerId);
+  ed.activePointers.delete(e.pointerId);
+  if(!had) return;
+  if(ed.activePointers.size<2) ed.pinch = null;
+  if(ed.activePointers.size===0){
+    if(ed.drawShape){ ed.shapes.push(ed.drawShape); ed.selectedId = ed.drawShape.id; ed.drawShape=null; }
+    if(ed.dragMove && ed.dragMove.mode==='tap' && !ed.dragMove.moved){
+      const img = toImageSpace(ed.dragMove.startCx, ed.dragMove.startCy);
+      if(ed.tool==='text'){
+        const txt = prompt('Enter text:');
+        if(txt){ ed.shapes.push({ id:'sh'+Date.now(), type:'text', x:img.x, y:img.y, text:txt, color:ed.color, fontSize: Math.max(18, ed.img.width*0.035) }); ed.selectedId = ed.shapes[ed.shapes.length-1].id; }
+      } else if(ed.tool==='circle'){
+        ed.shapes.push({ id:'sh'+Date.now(), type:'circle', x:img.x, y:img.y, r: ed.img.width*0.06, mag:2.5, color:ed.color });
+        ed.selectedId = ed.shapes[ed.shapes.length-1].id;
       }
-      return;
     }
-    markup.drawing = true;
-    if (markup.tool === 'pen') markup.current = { tool: 'pen', color: markup.color, width: markup.width, points: [[x, y]] };
-    else markup.current = { tool: markup.tool, color: markup.color, width: markup.width, x1: x, y1: y, x2: x, y2: y };
-    redrawMarkup();
-  });
-
-  canvas.addEventListener('pointermove', e => {
-    if (markup.activePointers.has(e.pointerId)) markup.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    if (markup.activePointers.size === 2 && markup.pinchStart) {
-      const pts = [...markup.activePointers.values()];
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
-      const ps = markup.pinchStart;
-      const newScale = Math.min(4, Math.max(1, ps.scale * (dist / ps.dist)));
-      markup.zoom.scale = newScale;
-      markup.zoom.tx = mid.x - ps.viewportRect.left - ps.staticLeft - newScale * ps.ax;
-      markup.zoom.ty = mid.y - ps.viewportRect.top - ps.staticTop - newScale * ps.ay;
-      applyZoomTransform();
-      return;
-    }
-    if (!markup.drawing || !markup.current) return;
-    const [x, y] = canvasPoint(e);
-    if (markup.tool === 'pen') markup.current.points.push([x, y]);
-    else { markup.current.x2 = x; markup.current.y2 = y; }
-    redrawMarkup();
-  });
-
-  function finish(e) {
-    markup.activePointers.delete(e.pointerId);
-    if (markup.activePointers.size < 2) markup.pinchStart = null;
-    if (markup.drawing && markup.current) { markup.strokes.push(markup.current); markup.current = null; }
-    markup.drawing = false;
-    redrawMarkup();
+    ed.dragMove = null;
+    redrawEditor();
   }
-  canvas.addEventListener('pointerup', finish);
-  canvas.addEventListener('pointercancel', finish);
 }
+edCanvas.addEventListener('pointerup', endPointer);
+edCanvas.addEventListener('pointercancel', endPointer);
+edCanvas.addEventListener('wheel', e=>{
+  if(!ed) return;
+  e.preventDefault();
+  const {cx,cy} = canvasPointFromEvent(e);
+  const img = toImageSpace(cx,cy);
+  const factor = e.deltaY<0 ? 1.12 : 0.89;
+  const newScale = Math.max(0.3, Math.min(6, ed.scale*factor));
+  const e2 = ed.baseScale*newScale;
+  ed.panX = cx - edCanvas.width/2 - (img.x-ed.img.width/2)*e2;
+  ed.panY = cy - edCanvas.height/2 - (img.y-ed.img.height/2)*e2;
+  ed.scale = newScale;
+  redrawEditor();
+}, {passive:false});
 
-/* =========================== Geo / Site Map =========================== */
-function geoPoints() {
-  return state.trees
-    .map((t, i) => ({ i, t, lat: parseFloat(t.gps.lat), lng: parseFloat(t.gps.lng) }))
-    .filter(p => isFinite(p.lat) && isFinite(p.lng));
-}
-function toLocalXY(lat, lng, originLat, originLng) {
-  const R = 6371000;
-  const dLat = (lat - originLat) * Math.PI / 180;
-  const dLng = (lng - originLng) * Math.PI / 180;
-  return { x: dLng * Math.cos(originLat * Math.PI / 180) * R, y: dLat * R };
-}
-function niceRoundScale(v) {
-  if (v <= 0) return 5;
-  const pow = Math.pow(10, Math.floor(Math.log10(v)));
-  const n = v / pow;
-  return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * pow;
-}
-function renderSiteMapCanvas(width = 600, height = 440) {
-  const canvas = document.createElement('canvas');
-  canvas.width = width; canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#EAF1FB'; ctx.fillRect(0, 0, width, height);
+document.getElementById('edUndoBtn').addEventListener('click', ()=>{ if(ed && ed.shapes.length){ ed.shapes.pop(); ed.selectedId=null; redrawEditor(); } });
+document.getElementById('edClearBtn').addEventListener('click', ()=>{ if(ed && ed.shapes.length && confirm('Clear all annotations on this photo?')){ ed.shapes=[]; ed.selectedId=null; redrawEditor(); } });
+document.getElementById('edDeleteBtn').addEventListener('click', ()=>{
+  if(!ed || ed.selectedId==null) return;
+  ed.shapes = ed.shapes.filter(s=>s.id!==ed.selectedId); ed.selectedId=null; redrawEditor();
+});
+document.getElementById('edResetZoomBtn').addEventListener('click', ()=>{ if(ed){ ed.scale=1; ed.panX=0; ed.panY=0; redrawEditor(); } });
+document.getElementById('edCancelBtn').addEventListener('click', closeEditor);
+document.getElementById('edSaveBtn').addEventListener('click', ()=>{
+  if(!ed) return;
+  ed.selectedId = null; redrawEditor();
+  const flattened = edCanvas.toDataURL('image/jpeg', 0.85);
+  const photo = findPhoto(edTarget);
+  photo.editedDataUrl = flattened;
+  photo.shapes = JSON.parse(JSON.stringify(ed.shapes));
+  closeEditor();
+  renderStepTrees();
+  persist();
+});
+function closeEditor(){ edModal.classList.add('hidden'); ed=null; edTarget=null; }
+window.addEventListener('resize', ()=>{ if(ed){ sizeEditorCanvas(); ed.baseScale = Math.min(edCanvas.width/ed.img.width, edCanvas.height/ed.img.height); redrawEditor(); } });
 
-  const pts = geoPoints();
-  if (!pts.length) {
-    ctx.fillStyle = '#1A73E8'; ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('No GPS coordinates captured yet', width / 2, height / 2);
-    return canvas;
-  }
+/* ===================== PDF generation ===================== */
+function taskTypeLabel(task){ return task.type==='Other (specify)' ? (task.customType||'Other') : task.type; }
 
-  const originLat = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
-  const originLng = pts.reduce((s, p) => s + p.lng, 0) / pts.length;
-  const xy = pts.map(p => Object.assign({}, p, toLocalXY(p.lat, p.lng, originLat, originLng)));
-
-  const pad = 50;
-  const xs = xy.map(p => p.x), ys = xy.map(p => p.y);
-  let minX = Math.min(...xs, -5), maxX = Math.max(...xs, 5);
-  let minY = Math.min(...ys, -5), maxY = Math.max(...ys, 5);
-  const span = Math.max(maxX - minX, maxY - minY, 10);
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  minX = cx - span / 2; maxX = cx + span / 2; minY = cy - span / 2; maxY = cy + span / 2;
-
-  function project(x, y) {
-    return [
-      pad + (x - minX) / (maxX - minX) * (width - 2 * pad),
-      height - pad - (y - minY) / (maxY - minY) * (height - 2 * pad)
-    ];
-  }
-
-  ctx.strokeStyle = '#AECBFA'; ctx.lineWidth = 1;
-  ctx.strokeRect(pad, pad, width - 2 * pad, height - 2 * pad);
-
-  const scaleMeters = niceRoundScale(span / 4);
-  const scalePx = scaleMeters / (maxX - minX) * (width - 2 * pad);
-  ctx.strokeStyle = '#1A73E8'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(pad, height - 20); ctx.lineTo(pad + scalePx, height - 20); ctx.stroke();
-  ctx.fillStyle = '#1A73E8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText(`${scaleMeters} m`, pad, height - 26);
-
-  ctx.save();
-  ctx.translate(width - 30, 36);
-  ctx.strokeStyle = '#1A73E8'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(0, 14); ctx.lineTo(0, -14); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(-5, -5); ctx.lineTo(5, -5); ctx.closePath();
-  ctx.fillStyle = '#1A73E8'; ctx.fill();
-  ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('N', 0, -18);
-  ctx.restore();
-
-  xy.forEach(p => {
-    const [px, py] = project(p.x, p.y);
-    ctx.beginPath(); ctx.arc(px, py, 10, 0, Math.PI * 2);
-    ctx.fillStyle = '#1A73E8'; ctx.fill();
-    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 10px sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(p.i + 1), px, py + 1);
-    ctx.fillStyle = '#0B1220'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText((p.t.species || 'Tree ' + (p.i + 1)).slice(0, 18), px, py + 22);
-  });
-  return canvas;
-}
-
-function taskSummaryLine(t) {
-  return t.tasks.map(x => {
-    const tt = taskTotals(x);
-    const label = x.type === 'Other' ? (x.customType || 'Other') : x.type;
-    return `${label} [${tt.hrs}h / $${money(tt.price)}]${x.isSplit ? ' (SPLIT)' : ''}`;
-  }).join('; ');
-}
-
-function buildGeoJSON() {
-  return {
-    type: 'FeatureCollection',
-    features: state.trees.map((t, i) => {
-      const lat = parseFloat(t.gps.lat), lng = parseFloat(t.gps.lng);
-      const totals = treeTotals(t);
-      return {
-        type: 'Feature',
-        geometry: (isFinite(lat) && isFinite(lng)) ? { type: 'Point', coordinates: [lng, lat] } : null,
-        properties: {
-          treeNumber: i + 1,
-          species: t.species || '',
-          dbh: t.dbh || '',
-          location: t.location || '',
-          treePrice: t.price || '',
-          gpsAccuracyMeters: t.gps.accuracy || null,
-          tasks: taskSummaryLine(t),
-          estimatedHours: totals.hrs,
-          estimatedPrice: totals.price,
-          hasMainPhoto: !!t.mainPhoto
-        }
-      };
-    })
-  };
-}
-
-function csvEscape(v) {
-  v = String(v == null ? '' : v);
-  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
-}
-function buildCsv() {
-  const headers = ['Tree#', 'Species', 'DBH', 'Location', 'TreePrice', 'Latitude', 'Longitude', 'GPSAccuracy_m', 'Tasks', 'EstHours', 'EstPrice'];
-  const rows = state.trees.map((t, i) => {
-    const totals = treeTotals(t);
-    return [
-      i + 1, t.species, t.dbh, t.location, t.price,
-      t.gps.lat || '', t.gps.lng || '', t.gps.accuracy ? Math.round(t.gps.accuracy) : '',
-      taskSummaryLine(t), totals.hrs.toFixed(2), totals.price.toFixed(2)
-    ];
-  });
-  return [headers, ...rows].map(r => r.map(csvEscape).join(',')).join('\r\n');
-}
-
-/* =========================== PDF generation =========================== */
-function fitBox(w, h, maxW, maxH) {
-  const ratio = Math.min(maxW / w, maxH / h);
-  return { w: w * ratio, h: h * ratio };
-}
-
-async function buildPdf() {
+async function buildMainPdfDoc(){
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
-  const PAGE_W = 612, PAGE_H = 792, MARGIN = 42, CONTENT_W = PAGE_W - MARGIN * 2;
-  let y = MARGIN;
+  const doc = new jsPDF({ unit:'pt', format:'letter' });
+  const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight();
+  const margin = 44; let y = margin; const lineH = 15;
 
-  function footerStamp() { return new Date().toLocaleString(); }
-
-  function newPage() {
-    doc.addPage();
-    y = MARGIN;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(140);
-    doc.text(`${state.client.clientName || ''} — Tree Inspection Report`, MARGIN, 24);
-    doc.setDrawColor(200); doc.line(MARGIN, 30, PAGE_W - MARGIN, 30);
-    y = 46;
+  function ensure(h){ if(y+h > pageH-margin){ doc.addPage(); y = margin; } }
+  function band(text, bg){
+    doc.setFillColor(bg); doc.rect(0, y-20, pageW, 34, 'F');
+    doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(14);
+    doc.text(text, margin, y); y += 26; doc.setTextColor('#111111');
   }
-  function ensure(h) { if (y + h > PAGE_H - MARGIN - 16) newPage(); }
-
-  function heading(text, size = 13) {
-    ensure(28);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(size); doc.setTextColor(21, 41, 74);
-    doc.text(text, MARGIN, y); y += 8;
-    doc.setDrawColor(26, 115, 232); doc.setLineWidth(1.2);
-    doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += 16;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(20, 20, 20);
+  function h2(text){ ensure(24); doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor('#1A73E8'); doc.text(text, margin, y); y+=18; doc.setTextColor('#111111'); }
+  function p(text, size=10, bold=false, indent=0){
+    doc.setFont('helvetica', bold?'bold':'normal'); doc.setFontSize(size);
+    const lines = doc.splitTextToSize(String(text), pageW-margin*2-indent);
+    lines.forEach(l=>{ ensure(lineH); doc.text(l, margin+indent, y); y+=lineH; });
   }
-
-  function labelValue(label, value, labelW = 120) {
-    const lines = doc.splitTextToSize(value || '—', CONTENT_W - labelW);
-    ensure(lines.length * 12 + 4);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(60);
-    doc.text(label.toUpperCase(), MARGIN, y);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(20);
-    lines.forEach((ln, i) => doc.text(ln, MARGIN + labelW, y + i * 12));
-    y += lines.length * 12 + 6;
+  function addPhoto(dataUrl, label, w){
+    try{
+      const props = doc.getImageProperties(dataUrl);
+      const h = w*props.height/props.width;
+      ensure(h+16);
+      doc.addImage(dataUrl, 'JPEG', margin+indentCur, y, w, h);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor('#64748B');
+      doc.text('Photo '+label, margin+indentCur, y+h+10); doc.setTextColor('#111111');
+      y += h+20;
+    }catch(err){}
   }
+  let indentCur = 0;
 
-  function paragraphBox(title, text, accent) {
-    if (!text) return;
-    const lines = doc.splitTextToSize(text, CONTENT_W - 24);
-    const boxH = lines.length * 12 + 34;
-    ensure(boxH);
-    doc.setFillColor(248, 250, 249);
-    doc.roundedRect(MARGIN, y, CONTENT_W, boxH, 6, 6, 'F');
-    doc.setDrawColor(accent[0], accent[1], accent[2]);
-    doc.setLineWidth(3);
-    doc.line(MARGIN + 2, y + 4, MARGIN + 2, y + boxH - 4);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(accent[0], accent[1], accent[2]);
-    doc.text(title, MARGIN + 14, y + 16);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(30);
-    lines.forEach((ln, i) => doc.text(ln, MARGIN + 14, y + 30 + i * 12));
-    y += boxH + 14;
-  }
+  doc.setFillColor('#1A73E8'); doc.rect(0,0,pageW,54,'F');
+  doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(20);
+  doc.text('RTEC GTW Job Builder', margin, 34);
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text(new Date().toLocaleDateString(), pageW-margin-80, 34);
+  y = 80;
 
-  function taskTable(tasks, treeIdx) {
-    const colTask = 150, colHours = 55, colPrice = 65, colDetails = CONTENT_W - colTask - colHours - colPrice;
-    ensure(20);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(255);
-    doc.setFillColor(21, 41, 74);
-    doc.rect(MARGIN, y, CONTENT_W, 18, 'F');
-    doc.text('TASK', MARGIN + 6, y + 12);
-    doc.text('DETAILS', MARGIN + colTask + 6, y + 12);
-    doc.text('HRS', MARGIN + colTask + colDetails + 6, y + 12);
-    doc.text('PRICE', MARGIN + colTask + colDetails + colHours + 6, y + 12);
-    y += 18;
-    let subtotalHrs = 0, subtotalPrice = 0;
-    tasks.forEach((task, i) => {
-      const typeLabel = `${photoLabel(treeIdx, i)}. ${task.type === 'Other' ? (task.customType || 'Other') : task.type}`;
-      const typeLines = doc.splitTextToSize(typeLabel, colTask - 10);
-      const detailLines = doc.splitTextToSize(task.details || '—', colDetails - 10);
-      const tt = taskTotals(task);
-      const extraLines = task.isSplit ? [`⚡ SPLIT — Job A: ${(parseFloat(task.hours) || 0).toFixed(2)}h/$${money(task.price)} · Job B: ${(parseFloat(task.splitHours) || 0).toFixed(2)}h/$${money(task.splitPrice)}`] : [];
-      const bodyLineCount = Math.max(typeLines.length, detailLines.length, 1);
-      const rowH = (bodyLineCount + extraLines.length) * 12 + 8;
-      ensure(rowH);
-      if (i % 2 === 0) { doc.setFillColor(232, 240, 254); doc.rect(MARGIN, y, CONTENT_W, rowH, 'F'); }
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(20);
-      typeLines.forEach((ln, j) => doc.text(ln, MARGIN + 6, y + 12 + j * 12));
-      doc.setFont('helvetica', 'normal');
-      detailLines.forEach((ln, j) => doc.text(ln, MARGIN + colTask + 6, y + 12 + j * 12));
-      doc.text(tt.hrs ? tt.hrs.toFixed(2) : '—', MARGIN + colTask + colDetails + 6, y + 12);
-      doc.text(tt.price ? '$' + money(tt.price) : '—', MARGIN + colTask + colDetails + colHours + 6, y + 12);
-      if (extraLines.length) {
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(180, 83, 9);
-        doc.text(extraLines[0], MARGIN + 6, y + 12 + bodyLineCount * 12);
-      }
-      subtotalHrs += tt.hrs; subtotalPrice += tt.price;
-      y += rowH;
-    });
-    y += 4;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(21, 41, 74);
-    doc.text(`Task Subtotal: ${subtotalHrs.toFixed(2)} hrs · $${money(subtotalPrice)}`, PAGE_W - MARGIN, y, { align: 'right' });
-    y += 16;
-    return { hrs: subtotalHrs, price: subtotalPrice };
-  }
-
-  function photosGrid(photoLabelPairs) {
-    const items = photoLabelPairs.filter(pair => pair.photo);
-    if (!items.length) return;
-    const gap = 14, boxW = (CONTENT_W - gap) / 2, boxH = 190;
-    for (let i = 0; i < items.length; i += 2) {
-      ensure(boxH + 10);
-      const row = [items[i], items[i + 1]].filter(Boolean);
-      row.forEach((item, col) => {
-        const p = item.photo;
-        const x = MARGIN + col * (boxW + gap);
-        const fit = fitBox(p.width, p.height, boxW, boxH - 16);
-        const ix = x + (boxW - fit.w) / 2;
-        const src = p.hasMarkup ? p.markupDataUrl : p.originalDataUrl;
-        try { doc.addImage(src, 'JPEG', ix, y, fit.w, fit.h); } catch (e) {}
-        doc.setFontSize(8); doc.setTextColor(100); doc.setFont('helvetica', 'normal');
-        doc.text(`Photo ${item.label}${p.hasMarkup ? ' (markup)' : ''}`, x + boxW / 2, y + boxH - 4, { align: 'center' });
-      });
-      y += boxH + 10;
-    }
-  }
-
-  // Cover / header
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(21, 41, 74);
-  doc.text('RTEC GTW Job Builder — Tree & Landscape Inspection Report', MARGIN, y); y += 22;
-  doc.setDrawColor(26, 115, 232); doc.setLineWidth(1.5); doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += 16;
-
-  labelValue('SingleOps Lead #', state.client.singleOpsLead);
-  labelValue('Client', state.client.clientName);
-  labelValue('Job Site Address', state.client.propertyAddress);
-  labelValue('Contact', [state.client.contactName, state.client.contactPhone, state.client.contactEmail].filter(Boolean).join(' · '));
-  labelValue('Inspection Date', state.client.inspectionDate);
-  labelValue('Arborist', state.client.arboristName);
+  /* ===== PART 1: CLIENT PROPOSAL SCOPE ===== */
+  band('CLIENT PROPOSAL SCOPE', '#1A73E8');
+  h2('Client & Site Information');
+  p('SingleOps Lead #: '+(state.client.leadNum||'-'));
+  p('Client: '+(state.client.name||'-'));
+  p('City: '+(state.client.city||'').toUpperCase());
+  p('Phone: '+(state.client.phone||'-')+'   Email: '+(state.client.email||'-'));
+  p('Date: '+(state.client.date||'-')+'   Arborist: '+(state.client.arborist||'-'));
   y += 6;
 
-  heading('Tree & Landscape Inventory');
-  let runningHrs = 0, runningPrice = 0;
-  state.trees.forEach((t, i) => {
-    ensure(24);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(26, 115, 232);
-    doc.text(`Tree ${i + 1}: ${t.species || 'Unspecified Species'}`, MARGIN, y); y += 16;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(20);
-
-    photosGrid([{ label: photoLabel(i, null), photo: t.mainPhoto }]);
-
-    labelValue('Location', t.location, 100);
-    labelValue('DBH', t.dbh, 100);
-    if (t.gps.lat && t.gps.lng) labelValue('GPS', `${t.gps.lat}, ${t.gps.lng}${t.gps.accuracy ? ` (±${Math.round(t.gps.accuracy)}m)` : ''}`, 100);
-    if (t.price) labelValue('Tree Price', '$' + money(t.price), 100);
-
-    const taskSub = t.tasks.length ? taskTable(t.tasks, i) : { hrs: 0, price: 0 };
-    photosGrid(t.tasks.map((task, ti) => ({ label: photoLabel(i, ti), photo: task.photo })));
-
-    const treeHrs = taskSub.hrs, treePrice = taskSub.price + (parseFloat(t.price) || 0);
-    runningHrs += treeHrs; runningPrice += treePrice;
-    ensure(14);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120);
-    doc.text(`Running Total Through Tree ${i + 1}: ${runningHrs.toFixed(2)} hrs · $${money(runningPrice)}`, PAGE_W - MARGIN, y, { align: 'right' });
-    y += 18;
+  let running = 0;
+  h2('Tree-by-Tree Scope');
+  state.trees.forEach((tree,ti)=>{
+    const label = String(ti+1);
+    ensure(20);
+    p(`Tree ${label}: ${tree.species||'Unspecified species'}  (DBH: ${tree.dbh||'-'}")`, 11, true);
+    indentCur = 10;
+    p('Location: '+(tree.location||'-'), 9.5, false, 10);
+    if(tree.gps.lat||tree.gps.lng) p(`GPS: ${tree.gps.lat}, ${tree.gps.lng} (±${tree.gps.accuracy||'?'}m)`, 9.5, false, 10);
+    if(Number(tree.price)){ running += Number(tree.price); p(`Tree Price: ${money(tree.price)}   Running Total: ${money(running)}`, 9.5, true, 10); }
+    if(tree.mainPhoto && (tree.mainPhoto.editedDataUrl||tree.mainPhoto.originalDataUrl)){ indentCur=10; addPhoto(tree.mainPhoto.editedDataUrl||tree.mainPhoto.originalDataUrl, label, 200); }
+    tree.tasks.forEach((task,tj)=>{
+      const tlabel = label+String.fromCharCode(97+tj);
+      const tag = task.splitJob||task.splitVisit ? `  [${[task.splitJob&&'SPLIT JOB', task.splitVisit&&'SPLIT VISIT'].filter(Boolean).join(' / ')}]` : '';
+      p(`• ${taskTypeLabel(task)}${tag}`, 9.5, !!(task.splitJob||task.splitVisit), 10);
+      if(task.details) p(task.details, 9, false, 16);
+      if(Number(task.price)){ running += Number(task.price); p(`Task Price: ${money(task.price)}   Running Total: ${money(running)}`, 9, true, 16); }
+      if(task.photo && (task.photo.editedDataUrl||task.photo.originalDataUrl)){ indentCur=16; addPhoto(task.photo.editedDataUrl||task.photo.originalDataUrl, tlabel, 160); }
+    });
+    indentCur = 0; y += 4;
   });
-  if (!state.trees.length) {
-    doc.setFontSize(10); doc.setTextColor(100);
-    doc.text('No trees were recorded for this inspection.', MARGIN, y); y += 16;
+
+  const eq = state.equipment;
+  const eqPriced = [];
+  if(eq.crane.needed && Number(eq.crane.price)) eqPriced.push(['Crane '+(eq.crane.spec||''), Number(eq.crane.price)]);
+  if(eq.spyderLift.needed && Number(eq.spyderLift.price)) eqPriced.push(['Spyder Lift '+(eq.spyderLift.spec||''), Number(eq.spyderLift.price)]);
+  if(eqPriced.length){
+    h2('Additional Priced Equipment');
+    eqPriced.forEach(([label,price])=>{ running+=price; p(`${label}: ${money(price)}   Running Total: ${money(running)}`, 9.5); });
   }
 
   ensure(30);
-  doc.setFillColor(232, 240, 254);
-  doc.roundedRect(MARGIN, y, CONTENT_W, 26, 6, 6, 'F');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(21, 41, 74);
-  doc.text(`GRAND TOTAL: ${runningHrs.toFixed(2)} hrs · $${money(runningPrice)}`, MARGIN + 12, y + 18);
-  y += 38;
+  doc.setDrawColor('#1A73E8'); doc.line(margin, y, pageW-margin, y); y+=18;
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor('#1A73E8');
+  doc.text('GRAND TOTAL: '+money(running), margin, y); doc.setTextColor('#111111'); y+=24;
 
-  heading('Site Map & GPS Reference');
-  const gc1 = 32, gc2 = 160, gc3 = (CONTENT_W - gc1 - gc2) / 2;
-  ensure(18);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(255);
-  doc.setFillColor(21, 41, 74); doc.rect(MARGIN, y, CONTENT_W, 18, 'F');
-  doc.text('#', MARGIN + 6, y + 12);
-  doc.text('SPECIES', MARGIN + gc1 + 6, y + 12);
-  doc.text('LATITUDE', MARGIN + gc1 + gc2 + 6, y + 12);
-  doc.text('LONGITUDE', MARGIN + gc1 + gc2 + gc3 + 6, y + 12);
-  y += 18;
-  state.trees.forEach((t, i) => {
-    const rowH = 16;
-    ensure(rowH);
-    if (i % 2 === 0) { doc.setFillColor(232, 240, 254); doc.rect(MARGIN, y, CONTENT_W, rowH, 'F'); }
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(20);
-    doc.text(String(i + 1), MARGIN + 6, y + 11);
-    doc.text((t.species || 'Unspecified').slice(0, 26), MARGIN + gc1 + 6, y + 11);
-    doc.text(t.gps.lat ? String(t.gps.lat) : '—', MARGIN + gc1 + gc2 + 6, y + 11);
-    doc.text(t.gps.lng ? String(t.gps.lng) + (t.gps.accuracy ? `  (±${Math.round(t.gps.accuracy)}m)` : '') : '—', MARGIN + gc1 + gc2 + gc3 + 6, y + 11);
-    y += rowH;
+  /* ===== PART 2: CREW WORK ORDER ===== */
+  doc.addPage(); y = margin;
+  band('CREW WORK ORDER', '#334155');
+  h2('Tree & Task Detail (hours, no pricing)');
+  state.trees.forEach((tree,ti)=>{
+    const label = String(ti+1);
+    ensure(16);
+    p(`Tree ${label}: ${tree.species||'Unspecified'} - ${tree.location||'-'}`, 10.5, true);
+    tree.tasks.forEach((task,tj)=>{
+      const tlabel = label+String.fromCharCode(97+tj);
+      const tag = task.splitJob||task.splitVisit ? `  [${[task.splitJob&&'SPLIT JOB', task.splitVisit&&'SPLIT VISIT'].filter(Boolean).join(' / ')}]` : '';
+      p(`• (${tlabel}) ${taskTypeLabel(task)} — Est. ${task.hours||'-'} hrs${tag}`, 9.5, false, 10);
+    });
   });
-  if (!state.trees.length) { doc.setFontSize(10); doc.setTextColor(100); doc.text('No trees recorded.', MARGIN, y + 10); y += 16; }
-  y += 10;
+  y += 6;
+  h2('Required Equipment');
+  if(eq.bucketTruck!=='None') p('Bucket Truck: '+eq.bucketTruck);
+  if(eq.chipTruck!=='None') p('Chip Truck: '+eq.chipTruck);
+  if(eq.extraChipTruck!=='No') p('Extra Chip Truck: '+eq.extraChipTruck);
+  if(eq.crane.needed) p('Crane: '+(eq.crane.spec||'Yes'));
+  if(eq.stumpGrinder!=='None') p('Stump Grinder: '+eq.stumpGrinder);
+  if(eq.miniLoader!=='None') p('Mini Loader: '+eq.miniLoader);
+  if(eq.spyderLift.needed) p('Spyder Lift: '+(eq.spyderLift.spec||'Yes'));
+  p('Crew Size: '+(state.client.crewSize||'-'));
+  y+=6;
 
-  const mapCanvas = renderSiteMapCanvas(900, 660);
-  const mapFit = fitBox(mapCanvas.width, mapCanvas.height, CONTENT_W, 320);
-  ensure(mapFit.h + 20);
-  doc.setDrawColor(207, 224, 251); doc.setLineWidth(1);
-  doc.rect(MARGIN, y, mapFit.w, mapFit.h);
-  try { doc.addImage(mapCanvas.toDataURL('image/png'), 'PNG', MARGIN, y, mapFit.w, mapFit.h); } catch (e) {}
-  y += mapFit.h + 10;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(110);
-  doc.text('Positions are relative to one another (derived from captured GPS), not an absolute surveyed map.', MARGIN, y);
-  y += 18;
+  h2('Safety Concerns');
+  p(state.safety || 'None noted.');
+  y+=6;
 
-  const wp = state.workPlan;
-  heading('Work Plan & Logistics Summary');
-  labelValue('Crew Size', wp.crewSize);
-  const equipLines = EQUIPMENT_FIELDS
-    .filter(f => wp.equipment[f.key] !== 'Not Needed')
-    .map(f => `${f.label}: ${wp.equipment[f.key]}${f.priceKey && wp.equipment[f.priceKey] ? ' ($' + money(wp.equipment[f.priceKey]) + ')' : ''}`)
-    .concat(wp.equipment.equipmentOther ? [wp.equipment.equipmentOther] : []);
-  labelValue('Equipment Needed', equipLines.join('; '));
-  labelValue('Traffic Control', wp.trafficControl);
-  labelValue('Access / Permits', [...wp.permitsChecklist, wp.permitsCustom].filter(Boolean).join(', '));
-  labelValue('Safety Concerns', wp.safetyConcerns);
-  labelValue('Scheduling Concerns', wp.schedulingConcerns);
-  y += 8;
+  h2('Access & Permits');
+  ACCESS_ITEMS.forEach(([k,label])=>{ p(`[${state.accessPermits.standard[k]?'X':' '}] ${label}`); });
+  state.accessPermits.custom.forEach(c=>{ if(c.label) p(`[${c.checked?'X':' '}] ${c.label}`); });
+  y+=6;
 
-  paragraphBox('CREW WORK ORDER — INTERNAL USE', wp.crewNotes, [155, 28, 28]);
-  paragraphBox('CLIENT-FACING PROPOSAL NOTES', wp.clientNotes, [26, 115, 232]);
-  paragraphBox('INTERNAL NOTES — OFFICE / BILLING', wp.internalNotes, [21, 41, 74]);
-
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(140);
-    doc.text(`Page ${i} of ${totalPages}`, PAGE_W / 2, PAGE_H - 20, { align: 'center' });
-    doc.text(footerStamp(), PAGE_W - MARGIN, PAGE_H - 20, { align: 'right' });
-  }
+  h2('Crew / Internal Notes');
+  p('Crew Notes: '+(state.notes.crew||'-'));
+  p('Internal Notes: '+(state.notes.internal||'-'));
+  p('Scheduling / Traffic Control: '+(state.notes.scheduling||'-'));
+  p('Client Notes: '+(state.notes.client||'-'));
 
   return doc;
 }
 
-function dataURLtoBlob(dataUrl) {
-  const [meta, b64] = dataUrl.split(',');
-  const mime = meta.match(/data:(.*);base64/)[1];
-  const bin = atob(b64);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return new Blob([arr], { type: mime });
-}
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  return url;
-}
-
-function reportFilename(ext) {
-  const slug = slugify(state.client.clientName || 'Client');
-  const date = state.client.inspectionDate || todayISO();
-  return `Inspection_Report_${slug}_${date}.${ext}`;
-}
-
-async function exportPdf() {
-  flashToast('Building PDF…');
-  const doc = await buildPdf();
-  const blob = doc.output('blob');
-  const name = reportFilename('pdf');
-  const url = downloadBlob(blob, name);
-  addExportLink(name, url);
-  flashToast('PDF ready ✓');
-}
-
-async function exportZip() {
-  flashToast('Building package…');
-  const doc = await buildPdf();
-  const pdfBlob = doc.output('blob');
-  const zip = new JSZip();
-  const clientSlug = slugify(state.client.clientName || 'Client');
-  const date = state.client.inspectionDate || todayISO();
-  zip.file(reportFilename('pdf'), pdfBlob);
-  zip.file(`Trees_${clientSlug}_${date}.geojson`, JSON.stringify(buildGeoJSON(), null, 2));
-  zip.file(`Trees_${clientSlug}_${date}.csv`, buildCsv());
-  const photosFolder = zip.folder('Photos');
-  state.trees.forEach((t, idx) => {
-    const speciesSlug = slugify(t.species || 'Tree');
-    function addPhotoFile(photo, label) {
-      if (!photo) return;
-      photosFolder.file(`Tree_${speciesSlug}_${label}.jpg`, dataURLtoBlob(photo.originalDataUrl));
-      if (photo.hasMarkup) photosFolder.file(`Tree_${speciesSlug}_${label}_markup.jpg`, dataURLtoBlob(photo.markupDataUrl));
-    }
-    addPhotoFile(t.mainPhoto, photoLabel(idx, null));
-    t.tasks.forEach((task, ti) => addPhotoFile(task.photo, photoLabel(idx, ti)));
-  });
-  const blob = await zip.generateAsync({ type: 'blob' });
-  const name = `SingleOps_Package_${clientSlug}_${date}.zip`;
-  const url = downloadBlob(blob, name);
-  addExportLink(name, url);
-  flashToast('Package ready ✓');
-}
-
-function addExportLink(name, url) {
-  const box = document.getElementById('exportLinks');
-  if (!box) return;
-  const row = document.createElement('div');
-  row.innerHTML = `✓ <a href="${url}" target="_blank" rel="noopener" class="underline font-semibold">${esc(name)}</a> — tap to open/save if the download didn't prompt automatically.`;
-  box.appendChild(row);
-}
-
-/* =========================== Event wiring (delegation) =========================== */
-function handleBindEvent(e) {
-  const el = e.target.closest('[data-bind]');
-  if (!el) return;
-  setByPath(state, el.dataset.bind, el.value);
-  schedulePersist();
-  if (el.dataset.recalc) updateTotals();
-  if (el.tagName === 'SELECT') renderAll();
-}
-document.addEventListener('input', handleBindEvent);
-document.addEventListener('change', e => { if (e.target.tagName === 'SELECT') handleBindEvent(e); });
-
-document.addEventListener('click', async e => {
-  const el = e.target;
-
-  const gotoStep = el.closest('[data-goto-step]');
-  if (gotoStep) { goToStep(Number(gotoStep.dataset.gotoStep)); return; }
-
-  const gotoConfirm = el.closest('[data-goto-step-confirm]');
-  if (gotoConfirm) {
-    if (!state.trees.length) {
-      const ok = await confirmDialog('No trees added', 'Continue to the Work Plan without any trees in the inventory?');
-      if (!ok) return;
-    }
-    goToStep(Number(gotoConfirm.dataset.gotoStepConfirm));
-    return;
+function buildNotecardDoc(){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'in', format:[5,7] });
+  const margin=0.3, pageW=5; let y=0.35;
+  function line(text, size=9, bold=false){
+    doc.setFont('helvetica', bold?'bold':'normal'); doc.setFontSize(size);
+    const split = doc.splitTextToSize(String(text), pageW-margin*2);
+    split.forEach(l=>{ if(y>6.7){ return; } doc.text(l, margin, y); y += size/72*1.35; });
   }
+  doc.setFillColor('#1A73E8'); doc.rect(0,0,pageW,0.46,'F');
+  doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(13);
+  doc.text('RTEC GTW — Work Order', margin, 0.3);
+  doc.setTextColor('#111111'); y = 0.64;
 
-  if (el.closest('[data-next-from-1]')) {
-    if (!state.client.clientName || !state.client.propertyAddress) {
-      flashToast('Enter client name and job site address to continue');
-      return;
-    }
-    goToStep(2); return;
-  }
+  line('Lead #: '+(state.client.leadNum||'-'), 10, true);
+  line('Client: '+(state.client.name||'-'));
+  line('City: '+(state.client.city||'').toUpperCase());
+  line('Phone: '+(state.client.phone||'-')+'   Email: '+(state.client.email||'-'));
+  y += 0.04;
 
-  if (el.closest('[data-add-tree]')) { addTree(); return; }
-
-  const toggle = el.closest('[data-toggle-tree]');
-  if (toggle) { toggleTree(toggle.dataset.toggleTree); return; }
-
-  const delTree = el.closest('[data-remove-tree]');
-  if (delTree) { removeTree(delTree.dataset.removeTree); return; }
-
-  const addT = el.closest('[data-add-task]');
-  if (addT) { addTask(addT.dataset.addTask); return; }
-
-  const remT = el.closest('[data-remove-task]');
-  if (remT) { const [treeId, taskId] = remT.dataset.removeTask.split(':'); removeTask(treeId, taskId); return; }
-
-  const splitT = el.closest('[data-toggle-split]');
-  if (splitT) { const [treeId, taskId] = splitT.dataset.toggleSplit.split(':'); toggleSplit(treeId, taskId); return; }
-
-  const remP = el.closest('[data-remove-photo]');
-  if (remP) { removePhoto(remP.dataset.removePhoto); return; }
-
-  const remarkP = el.closest('[data-remark-photo]');
-  if (remarkP) { openMarkupModal(remarkP.dataset.remarkPhoto); return; }
-
-  const takePhoto = el.closest('[data-take-photo]');
-  if (takePhoto) { pendingPhotoTarget = takePhoto.dataset.takePhoto; document.getElementById('fileCamera').click(); return; }
-  const choosePhoto = el.closest('[data-choose-photo]');
-  if (choosePhoto) { pendingPhotoTarget = choosePhoto.dataset.choosePhoto; document.getElementById('fileLibrary').click(); return; }
-
-  const capGps = el.closest('[data-capture-gps]');
-  if (capGps) { captureGps(capGps.dataset.captureGps); return; }
-
-  const togglePermit = el.closest('[data-toggle-permit]');
-  if (togglePermit) {
-    const val = togglePermit.dataset.togglePermit;
-    const arr = state.workPlan.permitsChecklist;
-    const i = arr.indexOf(val);
-    if (i === -1) arr.push(val); else arr.splice(i, 1);
-    schedulePersist(); renderAll();
-    return;
-  }
-
-  const mTool = el.closest('[data-markup-tool]');
-  if (mTool) { markup.tool = mTool.dataset.markupTool; renderMarkupToolbar(); return; }
-  const mColor = el.closest('[data-markup-color]');
-  if (mColor) { markup.color = mColor.dataset.markupColor; renderMarkupToolbar(); return; }
-
-  if (el.id === 'markupResetZoom') { markup.zoom = { scale: 1, tx: 0, ty: 0 }; applyZoomTransform(); return; }
-  if (el.id === 'markupUndo') { markup.strokes.pop(); redrawMarkup(); return; }
-  if (el.id === 'markupClear') {
-    const p = getPhotoSlot(parsePhotoTarget(markup.target)).get();
-    markup.strokes = []; markup.current = null; markup.hadBaseMarkup = false;
-    const img = new Image();
-    img.onload = () => { markup.baseImage = img; redrawMarkup(); };
-    img.src = p.originalDataUrl;
-    return;
-  }
-  if (el.id === 'markupClose' || el.id === 'markupCancel') { document.getElementById('markupModal').classList.add('hidden'); return; }
-  if (el.id === 'markupSave') {
-    const canvas = document.getElementById('markupCanvas');
-    const slot = getPhotoSlot(parsePhotoTarget(markup.target));
-    const p = slot.get();
-    p.hasMarkup = markup.hadBaseMarkup || markup.strokes.length > 0;
-    p.markupDataUrl = p.hasMarkup ? canvas.toDataURL('image/jpeg', 0.88) : null;
-    document.getElementById('markupModal').classList.add('hidden');
-    schedulePersist(); renderAll();
-    return;
-  }
-
-  if (el.id === 'btnPdf') { el.disabled = true; try { await exportPdf(); } finally { el.disabled = false; } return; }
-  if (el.id === 'btnZip') { el.disabled = true; try { await exportZip(); } finally { el.disabled = false; } return; }
-
-  if (el.id === 'btnNewInspection') {
-    const ok = await confirmDialog('Start a new inspection?', 'This clears all client, tree, and work-plan data on this device. Make sure you already saved your PDF/ZIP export.');
-    if (!ok) return;
-    state = defaultState();
-    await dbDelete('current').catch(() => {});
-    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-    goToStep(1);
-    return;
-  }
-});
-
-document.getElementById('markupWidth').addEventListener('input', e => { markup.width = Number(e.target.value); });
-
-document.addEventListener('change', e => {
-  if (e.target.id === 'fileCamera' || e.target.id === 'fileLibrary') {
-    const file = e.target.files[0];
-    const target = pendingPhotoTarget;
-    e.target.value = '';
-    if (file && target) handlePhotoFile(target, file);
-  }
-});
-
-document.getElementById('themeToggle').addEventListener('click', () => {
-  const isDark = document.documentElement.classList.toggle('dark');
-  try { localStorage.setItem('arborist_theme', isDark ? 'dark' : 'light'); } catch (e) {}
-});
-
-/* =========================== Init / migration =========================== */
-function applySpeciesList() {
-  document.getElementById('speciesList').innerHTML = SPECIES_OPTIONS.map(s => `<option value="${esc(s)}">`).join('');
-}
-
-function migrateState() {
-  const c = state.client;
-  if (c.singleOpsLead === undefined) c.singleOpsLead = '';
-  delete c.companyName; delete c.credentials; delete c.certNumber;
-
-  if (!state.workPlan.equipment || Array.isArray(state.workPlan.equipment)) {
-    state.workPlan.equipment = defaultEquipment();
-  }
-  EQUIPMENT_FIELDS.forEach(f => {
-    if (state.workPlan.equipment[f.key] === undefined) state.workPlan.equipment[f.key] = 'Not Needed';
-    if (f.priceKey && state.workPlan.equipment[f.priceKey] === undefined) state.workPlan.equipment[f.priceKey] = '';
-  });
-  if (state.workPlan.permitsChecklist === undefined) state.workPlan.permitsChecklist = [];
-  if (state.workPlan.permitsCustom === undefined) state.workPlan.permitsCustom = state.workPlan.permits || '';
-  if (state.workPlan.internalNotes === undefined) state.workPlan.internalNotes = state.workPlan.adminNotes || '';
-  if (state.workPlan.schedulingConcerns === undefined) state.workPlan.schedulingConcerns = state.workPlan.schedulingPrefs || '';
-  delete state.workPlan.permits; delete state.workPlan.adminNotes; delete state.workPlan.schedulingPrefs;
-  delete state.workPlan.neighborPermission; delete state.workPlan.neighborNotes;
-
-  state.trees.forEach(t => {
-    if (!t.gps) t.gps = defaultGps();
-    if (t.price === undefined) t.price = '';
-    if (t.mainPhoto === undefined) t.mainPhoto = (t.photos && t.photos[0]) || null;
-    delete t.height; delete t.photos;
-    (t.tasks || []).forEach(task => {
-      if (task.price === undefined) task.price = '';
-      if (task.isSplit === undefined) task.isSplit = false;
-      if (task.splitHours === undefined) task.splitHours = '';
-      if (task.splitPrice === undefined) task.splitPrice = '';
-      if (task.photo === undefined) task.photo = null;
+  line('Split Work Tasks:', 10, true);
+  let any=false;
+  state.trees.forEach((tree,ti)=>{
+    tree.tasks.forEach(task=>{
+      if(task.splitJob||task.splitVisit){
+        any=true;
+        const tag = task.splitVisit?'SPLIT VISIT':'SPLIT JOB';
+        line(`• T${ti+1}: ${taskTypeLabel(task)} [${tag}] ${task.hours||'-'}h ${money(task.price)}`, 8);
+      }
     });
   });
+  if(!any) line('None', 9);
+  y += 0.04;
+
+  line('Equipment:', 10, true);
+  const eq = state.equipment; const eqLines=[];
+  if(eq.bucketTruck!=='None') eqLines.push('Bucket Truck '+eq.bucketTruck);
+  if(eq.chipTruck!=='None') eqLines.push('Chip Truck '+eq.chipTruck);
+  if(eq.extraChipTruck!=='No') eqLines.push('Extra Chip Truck '+eq.extraChipTruck);
+  if(eq.crane.needed) eqLines.push('Crane '+(eq.crane.spec||''));
+  if(eq.stumpGrinder!=='None') eqLines.push('Stump Grinder '+eq.stumpGrinder);
+  if(eq.miniLoader!=='None') eqLines.push('Mini Loader '+eq.miniLoader);
+  if(eq.spyderLift.needed) eqLines.push('Spyder Lift '+(eq.spyderLift.spec||''));
+  line(eqLines.join(', ')||'None', 8);
+  y += 0.04;
+
+  line('Crew Size: '+(state.client.crewSize||'-'), 9);
+  y += 0.04;
+
+  line('Access & Permits:', 10, true);
+  const sel = ACCESS_ITEMS.filter(([k])=>state.accessPermits.standard[k]).map(([,l])=>l);
+  state.accessPermits.custom.filter(c=>c.checked && c.label).forEach(c=>sel.push(c.label));
+  line(sel.join(', ')||'None', 8);
+  y += 0.04;
+
+  line('Traffic Control / Scheduling:', 10, true);
+  line(state.notes.scheduling||'-', 8);
+  y += 0.04;
+
+  line('Safety Notes:', 10, true);
+  line(state.safety||'-', 8);
+
+  return doc;
 }
 
-async function init() {
-  applySpeciesList();
-
-  const savedTheme = (() => { try { return localStorage.getItem('arborist_theme'); } catch (e) { return null; } })();
-  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  if (savedTheme === 'dark' || (!savedTheme && prefersDark)) document.documentElement.classList.add('dark');
-
-  try {
-    const rec = await dbGet('current');
-    if (rec && rec.state) state = Object.assign(defaultState(), rec.state);
-  } catch (e) {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) state = Object.assign(defaultState(), JSON.parse(raw));
-    } catch (e2) {}
-  }
-  migrateState();
-
-  wireMarkupCanvas();
-  renderAll();
-
-  const statusEl = document.getElementById('statusLine');
-  statusEl.textContent = navigator.onLine ? 'Online — caching for offline use…' : 'Offline';
-  window.addEventListener('online', () => statusEl.textContent = 'Online');
-  window.addEventListener('offline', () => statusEl.textContent = 'Offline — still fully usable');
-
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    try {
-      const reg = await navigator.serviceWorker.register('./sw.js');
-      await navigator.serviceWorker.ready;
-      statusEl.textContent = '🟢 Offline Ready';
-    } catch (e) {
-      statusEl.textContent = 'Running (offline caching unavailable)';
-    }
-  } else {
-    statusEl.textContent = 'Running (open via a server for offline caching)';
-  }
+function buildGeoJSON(){
+  return {
+    type:'FeatureCollection',
+    features: state.trees.map((tree,ti)=>({
+      type:'Feature',
+      geometry: { type:'Point', coordinates: [Number(tree.gps.lng)||0, Number(tree.gps.lat)||0] },
+      properties: {
+        treeNumber: ti+1, species: tree.species||'', dbh: tree.dbh||'', location: tree.location||'',
+        price: tree.price||'', leadNum: state.client.leadNum||'', city: (state.client.city||'').toUpperCase(),
+        accuracyMeters: tree.gps.accuracy||''
+      }
+    }))
+  };
+}
+function buildCSV(){
+  const header = ['TreeNumber','Latitude','Longitude','Accuracy_m','Species','DBH','Location','Price','LeadNum','City'];
+  const rows = state.trees.map((tree,ti)=>[ti+1, tree.gps.lat||'', tree.gps.lng||'', tree.gps.accuracy||'', csvEsc(tree.species), tree.dbh||'', csvEsc(tree.location), tree.price||'', state.client.leadNum||'', (state.client.city||'').toUpperCase()]);
+  return [header.join(','), ...rows.map(r=>r.join(','))].join('\n');
 }
 
-init();
+function jobFileBase(){
+  return `RTEC_GTW_${(state.client.city||'Job').replace(/[^a-z0-9]+/gi,'_')}_${state.client.date||''}`.replace(/_+$/,'');
+}
+
+async function withBusy(btn, label, fn){
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = label;
+  try{ await fn(); } catch(err){ console.error(err); toast('Error: '+err.message); }
+  finally{ btn.disabled = false; btn.textContent = orig; }
+}
+
+async function downloadMainPdfOnly(btn){
+  await withBusy(btn, 'Generating…', async ()=>{
+    const doc = await buildMainPdfDoc();
+    doc.save(jobFileBase()+'_Report.pdf');
+    toast('PDF report downloaded.');
+  });
+}
+function downloadNotecardOnly(){
+  const btn = document.getElementById('genCardBtn');
+  withBusy(btn, 'Generating…', async ()=>{
+    const doc = buildNotecardDoc();
+    doc.save(jobFileBase()+'_Notecard.pdf');
+    toast('Notecard PDF downloaded.');
+  });
+}
+async function generateAndDownloadZip(btn){
+  await withBusy(btn, 'Building ZIP…', async ()=>{
+    const zip = new JSZip();
+    const mainDoc = await buildMainPdfDoc();
+    zip.file(jobFileBase()+'_Report.pdf', mainDoc.output('blob'));
+    const cardDoc = buildNotecardDoc();
+    zip.file(jobFileBase()+'_Notecard.pdf', cardDoc.output('blob'));
+    zip.file('tree_coordinates.geojson', JSON.stringify(buildGeoJSON(), null, 2));
+    zip.file('tree_coordinates.csv', buildCSV());
+    const media = zip.folder('media');
+    state.trees.forEach((tree,ti)=>{
+      const label = String(ti+1);
+      if(tree.mainPhoto){
+        if(tree.mainPhoto.originalDataUrl) media.file(`${label}-main-original.jpg`, dataUrlToBlob(tree.mainPhoto.originalDataUrl));
+        if(tree.mainPhoto.editedDataUrl) media.file(`${label}-main-edited.jpg`, dataUrlToBlob(tree.mainPhoto.editedDataUrl));
+      }
+      tree.tasks.forEach((task,tj)=>{
+        const tl = label+String.fromCharCode(97+tj);
+        if(task.photo){
+          if(task.photo.originalDataUrl) media.file(`${tl}-original.jpg`, dataUrlToBlob(task.photo.originalDataUrl));
+          if(task.photo.editedDataUrl) media.file(`${tl}-edited.jpg`, dataUrlToBlob(task.photo.editedDataUrl));
+        }
+      });
+    });
+    const blob = await zip.generateAsync({ type:'blob' });
+    downloadBlob(blob, jobFileBase()+'.zip');
+    toast('ZIP bundle downloaded.');
+  });
+}
+
+/* ===================== Init ===================== */
+render();
 </script>
 </body>
 </html>
