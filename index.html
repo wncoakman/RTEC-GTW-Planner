@@ -1347,6 +1347,63 @@ function renderSiteMapCanvas(width = 600, height = 440) {
 /* ===================== PDF generation ===================== */
 function taskTypeLabel(task){ return task.type==='Other (specify)' ? (task.customType||'Other') : task.type; }
 
+/* Tree IDs in PDFs: "[SingleOps Lead #]-1", "-2"... (falls back to T1, T2 without a lead #). */
+function treeLabel(ti){ const lead = String(state.client.leadNum||'').trim(); return lead ? `${lead}-${ti+1}` : `T${ti+1}`; }
+function taskLabel(ti, tj){ return treeLabel(ti) + String.fromCharCode(97+tj); }
+
+/* Work type for the title, summarised from the job's tasks in the order they first appear. */
+const WORK_TYPE_GROUPS = [
+  [/^Prune/, 'Pruning'], [/^Removal - Full/, 'Take Down'], [/^Removal/, 'Hazard Limb Removal'],
+  [/^Stump/, 'Stump Grinding'], [/^Cabling/, 'Cabling'], [/^Root Collar/, 'Root Collar Excavation'],
+  [/^PHC/, 'PHC'], [/^Planting/, 'Planting'], [/^Mulching/, 'Mulching']
+];
+const SUPPORT_TASKS = /^(Haul Wood|Chip Debris)/;
+function jobWorkTypes(){
+  const types = [];
+  const add = t=>{ if(t && !types.includes(t)) types.push(t); };
+  state.trees.forEach(tree=>tree.tasks.forEach(task=>{
+    if(task.type==='Other (specify)'){ add((task.customType||'').trim()); return; }
+    if(SUPPORT_TASKS.test(task.type)) return;
+    const g = WORK_TYPE_GROUPS.find(([re])=>re.test(task.type));
+    add(g ? g[1] : task.type);
+  }));
+  return types.join(' / ') || 'Tree Work';
+}
+function formatInspectionDate(d){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d||'');
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : (d||'');
+}
+/* [SingleOps Lead #] GTW - [Work Type] | [Client Name] - [CITY], [Inspection Date] */
+function pdfTitle(){
+  const c = state.client;
+  const lead = String(c.leadNum||'').trim() || 'No Lead #';
+  const place = [String(c.name||'').trim() || 'Client', String(c.city||'').trim().toUpperCase()].filter(Boolean).join(' - ');
+  const date = formatInspectionDate(c.date);
+  return `${lead} GTW - ${jobWorkTypes()} | ${place}${date ? ', '+date : ''}`;
+}
+/* Draws the title banner across the top of the first page, wrapping and shrinking the text to fit.
+   Returns the banner height. Units follow the document (pt or in). */
+function drawTitleBanner(doc, pageW, margin, maxSize, minSize, lineFactor, pad){
+  const title = pdfTitle();
+  doc.setFont('helvetica','bold');
+  let size = maxSize, lines;
+  for(;;){
+    doc.setFontSize(size);
+    lines = doc.splitTextToSize(title, pageW - margin*2);
+    if(lines.length<=2 || size<=minSize) break;
+    size -= 1;
+  }
+  const k = doc.internal.scaleFactor; // points per document unit
+  const lh = size/k*lineFactor;
+  const h = pad*2 + lh*lines.length;
+  doc.setFillColor('#1A73E8'); doc.rect(0, 0, pageW, h, 'F');
+  doc.setTextColor('#FFFFFF');
+  lines.forEach((l,i)=>doc.text(l, margin, pad + lh*(i+0.78)));
+  doc.setTextColor('#111111');
+  doc.setProperties({ title });
+  return h;
+}
+
 async function buildMainPdfDoc(){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'pt', format:'letter' });
@@ -1378,12 +1435,8 @@ async function buildMainPdfDoc(){
   }
   let indentCur = 0;
 
-  doc.setFillColor('#1A73E8'); doc.rect(0,0,pageW,54,'F');
-  doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(20);
-  doc.text('RTEC GTW Job Builder', margin, 34);
-  doc.setFontSize(10); doc.setFont('helvetica','normal');
-  doc.text(state.client.date || new Date().toLocaleDateString(), pageW-margin, 34, {align:'right'});
-  y = 80;
+  const bannerH = drawTitleBanner(doc, pageW, margin, 17, 11, 1.25, 14);
+  y = bannerH + 28;
 
   /* ===== PART 1: CLIENT PROPOSAL SCOPE ===== */
   band('CLIENT PROPOSAL SCOPE', '#1A73E8');
@@ -1398,18 +1451,18 @@ async function buildMainPdfDoc(){
   let running = 0;
   h2('Tree-by-Tree Scope');
   state.trees.forEach((tree,ti)=>{
-    const label = String(ti+1);
+    const label = treeLabel(ti);
     ensure(20);
-    p(`Tree ${label}: ${tree.species||'Unspecified species'}  (DBH: ${tree.dbh||'-'}")`, 11, true);
+    p(`${label}: ${tree.species||'Unspecified species'}  (DBH: ${tree.dbh||'-'}")`, 11, true);
     indentCur = 10;
     p('Location: '+(tree.location||'-'), 9.5, false, 10);
     if(tree.gps.lat||tree.gps.lng) p(`GPS: ${tree.gps.lat}, ${tree.gps.lng} (±${tree.gps.accuracy||'?'}m)`, 9.5, false, 10);
     if(Number(tree.price)){ running += Number(tree.price); p(`Tree Price: ${money(tree.price)}   Running Total: ${money(running)}`, 9.5, true, 10); }
     if(tree.mainPhoto && (tree.mainPhoto.editedDataUrl||tree.mainPhoto.originalDataUrl)){ indentCur=10; addPhoto(tree.mainPhoto.editedDataUrl||tree.mainPhoto.originalDataUrl, label, 200); }
     tree.tasks.forEach((task,tj)=>{
-      const tlabel = label+String.fromCharCode(97+tj);
+      const tlabel = taskLabel(ti,tj);
       const tag = task.splitJob ? '  [SPLIT JOB]' : '';
-      p(`• ${taskTypeLabel(task)}${tag}`, 9.5, !!task.splitJob, 10);
+      p(`• (${tlabel}) ${taskTypeLabel(task)}${tag}`, 9.5, !!task.splitJob, 10);
       if(task.details) p(task.details, 9, false, 16);
       if(Number(task.price)){ running += Number(task.price); p(`Task Price: ${money(task.price)}   Running Total: ${money(running)}`, 9, true, 16); }
       if(task.photo && (task.photo.editedDataUrl||task.photo.originalDataUrl)){ indentCur=16; addPhoto(task.photo.editedDataUrl||task.photo.originalDataUrl, tlabel, 160); }
@@ -1436,11 +1489,10 @@ async function buildMainPdfDoc(){
   band('CREW WORK ORDER', '#334155');
   h2('Tree & Task Detail (hours, no pricing)');
   state.trees.forEach((tree,ti)=>{
-    const label = String(ti+1);
     ensure(16);
-    p(`Tree ${label}: ${tree.species||'Unspecified'} - ${tree.location||'-'}`, 10.5, true);
+    p(`${treeLabel(ti)}: ${tree.species||'Unspecified'} - ${tree.location||'-'}`, 10.5, true);
     tree.tasks.forEach((task,tj)=>{
-      const tlabel = label+String.fromCharCode(97+tj);
+      const tlabel = taskLabel(ti,tj);
       const tag = task.splitJob ? '  [SPLIT JOB]' : '';
       p(`• (${tlabel}) ${taskTypeLabel(task)} — Est. ${task.hours||'-'} hrs${tag}`, 9.5, false, 10);
     });
@@ -1450,7 +1502,7 @@ async function buildMainPdfDoc(){
   h2('Site Map & GPS Reference');
   state.trees.forEach((tree,ti)=>{
     const acc = tree.gps.accuracy ? `  (±${Math.round(Number(tree.gps.accuracy))}m)` : '';
-    p(`${ti+1}. ${tree.species||'Unspecified'}: ${tree.gps.lat||'-'}, ${tree.gps.lng||'-'}${acc}`, 9.5, false, 10);
+    p(`${treeLabel(ti)} (map pin ${ti+1}): ${tree.species||'Unspecified'}: ${tree.gps.lat||'-'}, ${tree.gps.lng||'-'}${acc}`, 9.5, false, 10);
   });
   if(geoPoints().length){
     const mapCanvas = renderSiteMapCanvas(900, 660);
@@ -1507,10 +1559,8 @@ function buildNotecardDoc(){
       doc.text(l, margin, y); y += size/72*1.35;
     });
   }
-  doc.setFillColor('#1A73E8'); doc.rect(0,0,pageW,0.46,'F');
-  doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(13);
-  doc.text('RTEC GTW — Work Order', margin, 0.3);
-  doc.setTextColor('#111111'); y = 0.64;
+  const bannerH = drawTitleBanner(doc, pageW, margin, 11, 8, 1.2, 0.1);
+  y = bannerH + 0.22;
 
   line('Lead #: '+(state.client.leadNum||'-'), 10, true);
   line('Client: '+(state.client.name||'-'));
@@ -1518,13 +1568,13 @@ function buildNotecardDoc(){
   line('Phone: '+(state.client.phone||'-')+'   Email: '+(state.client.email||'-'));
   y += 0.04;
 
-  line('Split Work Tasks:', 10, true);
+  line('Split Visits:', 10, true);
   let any=false;
   state.trees.forEach((tree,ti)=>{
     tree.tasks.forEach(task=>{
       if(task.splitJob){
         any=true;
-        line(`• T${ti+1}: ${taskTypeLabel(task)} [SPLIT JOB] ${task.hours||'-'}h ${money(task.price)}`, 8);
+        line(`• ${treeLabel(ti)}: ${taskTypeLabel(task)}  ${task.hours||'-'}h  ${money(task.price)}`, 8);
       }
     });
   });
