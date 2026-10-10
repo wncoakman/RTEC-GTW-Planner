@@ -145,7 +145,7 @@ function newState(){
     client: { leadNum:'', city:'', name:'', phone:'', email:'', date:'', arborist:'', crewSize:'' },
     trees: [newTree()],
     equipment: {
-      bucketTruck:'None', chipTruck:'None', extraChipTruck:'No',
+      bucketTruck:'None', chipper:'None', chipTruck:'None', extraChipTruck:'No',
       crane:{ needed:false, spec:'', price:'' },
       stumpGrinder:'None', miniLoader:'None',
       spyderLift:{ needed:false, price:'' }
@@ -566,11 +566,15 @@ function renderStepLogistics(){
           <select data-bind="equipment.bucketTruck" class="w-full border border-slate-300 rounded-lg px-2 py-2">
             ${['None',"60'","75'"].map(o=>`<option ${eq.bucketTruck===o?'selected':''}>${o}</option>`).join('')}
           </select></label>
+        <label><span class="block text-xs font-medium text-slate-500 mb-1">Chipper</span>
+          <select data-bind="equipment.chipper" class="w-full border border-slate-300 rounded-lg px-2 py-2">
+            ${['None','Small','Standard'].map(o=>`<option ${eq.chipper===o?'selected':''}>${o}</option>`).join('')}
+          </select></label>
         <label><span class="block text-xs font-medium text-slate-500 mb-1">Chip Truck</span>
           <select data-bind="equipment.chipTruck" class="w-full border border-slate-300 rounded-lg px-2 py-2">
             ${['None','Small','Standard'].map(o=>`<option ${eq.chipTruck===o?'selected':''}>${o}</option>`).join('')}
           </select></label>
-        <label class="col-span-2"><span class="block text-xs font-medium text-slate-500 mb-1">Extra Chip Truck</span>
+        <label><span class="block text-xs font-medium text-slate-500 mb-1">Extra Chip Truck</span>
           <select data-bind="equipment.extraChipTruck" class="w-full border border-slate-300 rounded-lg px-2 py-2">
             ${['No','Yes - Small','Yes - Standard'].map(o=>`<option ${eq.extraChipTruck===o?'selected':''}>${o}</option>`).join('')}
           </select></label>
@@ -1516,6 +1520,7 @@ async function buildMainPdfDoc(){
   y += 6;
   h2('Required Equipment');
   if(eq.bucketTruck!=='None') p('Bucket Truck: '+eq.bucketTruck);
+  if(eq.chipper!=='None') p('Chipper: '+eq.chipper);
   if(eq.chipTruck!=='None') p('Chip Truck: '+eq.chipTruck);
   if(eq.extraChipTruck!=='No') p('Extra Chip Truck: '+eq.extraChipTruck);
   if(eq.crane.needed) p('Crane: '+(eq.crane.spec||'Yes'));
@@ -1584,6 +1589,7 @@ function buildNotecardDoc(){
   line('Equipment:', 10, true);
   const eq = state.equipment; const eqLines=[];
   if(eq.bucketTruck!=='None') eqLines.push('Bucket Truck '+eq.bucketTruck);
+  if(eq.chipper!=='None') eqLines.push('Chipper '+eq.chipper);
   if(eq.chipTruck!=='None') eqLines.push('Chip Truck '+eq.chipTruck);
   if(eq.extraChipTruck!=='No') eqLines.push('Extra Chip Truck '+eq.extraChipTruck);
   if(eq.crane.needed) eqLines.push('Crane '+(eq.crane.spec||''));
