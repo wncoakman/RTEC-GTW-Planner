@@ -597,8 +597,8 @@ function renderStepLogistics(){
           <input data-bind="equipment.spyderLift.price" value="${esc(eq.spyderLift.price)}" type="number" step="0.01" placeholder="Spyder Lift Price" class="border border-slate-300 rounded-lg px-2 py-2 text-sm">
         </div>` : ''}
       </div>
-      <label class="block text-sm pt-1"><span class="block text-xs font-medium text-slate-500 mb-1">Crew Size</span>
-        <input data-bind="client.crewSize" value="${esc(state.client.crewSize)}" type="number" class="w-32 border border-slate-300 rounded-lg px-3 py-2"></label>
+      <label class="block text-sm pt-1"><span class="block text-xs font-medium text-slate-500 mb-1">Crew Details</span>
+        <input data-bind="client.crewSize" value="${esc(state.client.crewSize)}" type="text" placeholder="e.g. 4 - 2 climbers, 2 ground; CDL driver" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
     </div>
 
     <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
@@ -1464,7 +1464,7 @@ async function buildMainPdfDoc(){
   if(eq.stumpGrinder!=='None') p('Stump Grinder: '+eq.stumpGrinder);
   if(eq.miniLoader!=='None') p('Mini Loader: '+eq.miniLoader);
   if(eq.spyderLift.needed) p('Spyder Lift: '+(eq.spyderLift.spec||'Yes'));
-  p('Crew Size: '+(state.client.crewSize||'-'));
+  p('Crew Details: '+(state.client.crewSize||'-'));
   y+=6;
 
   h2('Safety Concerns');
@@ -1533,7 +1533,7 @@ function buildNotecardDoc(){
   line(eqLines.join(', ')||'None', 8);
   y += 0.04;
 
-  line('Crew Size: '+(state.client.crewSize||'-'), 9);
+  line('Crew Details: '+(state.client.crewSize||'-'), 9);
   y += 0.04;
 
   line('Access & Permits:', 10, true);
