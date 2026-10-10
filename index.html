@@ -325,6 +325,12 @@ function renderAll() {
   else if (state.step === 3) app.innerHTML = renderStep3();
   else app.innerHTML = renderStep4();
   updateTotals();
+  const siteMapHolder = document.getElementById('siteMapHolder');
+  if (siteMapHolder) {
+    const canvas = renderSiteMapCanvas(560, 380);
+    canvas.style.maxWidth = '100%';
+    siteMapHolder.appendChild(canvas);
+  }
 }
 
 /* =========================== Step 1: Client & Site =========================== */
@@ -368,6 +374,7 @@ function addTree() {
   state.trees.forEach(t => t.expanded = false);
   state.trees.push({
     id: uid(), species: '', dbh: '', height: '', location: '',
+    gps: { lat: '', lng: '', accuracy: null, capturedAt: null },
     photos: [], tasks: [], expanded: true
   });
   schedulePersist();
@@ -404,6 +411,30 @@ function removeTask(treeId, taskId) {
   schedulePersist();
   renderAll();
 }
+function captureGps(treeId) {
+  const t = state.trees.find(x => x.id === treeId);
+  if (!navigator.geolocation) { flashToast('Geolocation not supported on this device'); return; }
+  flashToast('Getting GPS fix…');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      t.gps.lat = pos.coords.latitude.toFixed(6);
+      t.gps.lng = pos.coords.longitude.toFixed(6);
+      t.gps.accuracy = pos.coords.accuracy;
+      t.gps.capturedAt = new Date().toISOString();
+      schedulePersist();
+      renderAll();
+      flashToast(pos.coords.accuracy > 25 ? 'GPS captured — weak signal, verify position' : 'GPS captured ✓');
+    },
+    err => {
+      let msg = 'GPS unavailable — enter coordinates manually';
+      if (err.code === 1) msg = 'Location permission denied — enable in Settings or enter manually';
+      else if (err.code === 3) msg = 'GPS timed out (heavy canopy?) — enter manually';
+      flashToast(msg);
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
 async function removePhoto(treeId, photoId) {
   const ok = await confirmDialog('Remove this photo?', 'This cannot be undone.');
   if (!ok) return;
@@ -474,6 +505,22 @@ function renderTreeCard(t, idx) {
         <div>
           <label class="field-label">Location on Landscape</label>
           <input class="field-input mt-1" data-bind="trees.${idx}.location" value="${esc(t.location)}" placeholder="e.g. Front yard, right of walkway">
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="field-label">GPS Location</label>
+          <button class="chip" data-capture-gps="${t.id}">📍 Capture Current GPS Position</button>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="field-label">Latitude</label><input class="field-input mt-1" type="number" step="0.000001" data-bind="trees.${idx}.gps.lat" value="${esc(t.gps.lat)}" placeholder="e.g. 38.627003"></div>
+          <div><label class="field-label">Longitude</label><input class="field-input mt-1" type="number" step="0.000001" data-bind="trees.${idx}.gps.lng" value="${esc(t.gps.lng)}" placeholder="e.g. -90.199402"></div>
+        </div>
+        <div class="text-xs opacity-70 mt-1">
+          ${t.gps.accuracy
+            ? `Accuracy: ±${Math.round(t.gps.accuracy)} m ${t.gps.accuracy > 25 ? '⚠️ weak signal — verify/adjust manually' : '✓ good fix'} · captured ${new Date(t.gps.capturedAt).toLocaleTimeString()}`
+            : 'No GPS fix captured yet — tap Capture, or enter coordinates manually if under heavy canopy.'}
         </div>
       </div>
 
@@ -624,9 +671,18 @@ function renderStep4() {
         </div>
       </div>
 
+      <div class="card p-4">
+        <h2 class="font-bold text-lg mb-2">Site Map &amp; GPS Reference</h2>
+        <div class="text-sm space-y-1 opacity-90 mb-3">
+          ${state.trees.map((t, i) => `<div>${i + 1}. ${esc(t.species) || 'Unspecified'} — ${t.gps.lat && t.gps.lng ? `${esc(t.gps.lat)}, ${esc(t.gps.lng)}${t.gps.accuracy ? ` (±${Math.round(t.gps.accuracy)}m)` : ''}` : 'no GPS captured'}</div>`).join('') || '<div class="opacity-60">No trees added.</div>'}
+        </div>
+        <div id="siteMapHolder" class="flex justify-center overflow-hidden rounded-xl border-2 border-brand-200"></div>
+        <p class="text-xs opacity-60 mt-2">Relative positions derived from captured GPS — not an absolute surveyed map.</p>
+      </div>
+
       <div class="card p-4 space-y-3">
         <h2 class="font-bold text-lg">Generate Deliverables</h2>
-        <p class="text-sm opacity-70">Produces a PDF report and a zipped media package (report + original/marked-up photos, named by tree &amp; species) for SingleOps proposal entry.</p>
+        <p class="text-sm opacity-70">Produces a PDF report, and a zipped package containing the PDF, a GeoJSON + CSV coordinate file, and a <code>Photos/</code> folder of original &amp; marked-up tree photos named by tree &amp; species — ready for SingleOps proposal entry.</p>
         <button class="btn-primary w-full tap" id="btnPdf">📄 Download PDF Report</button>
         <button class="btn-primary w-full tap" id="btnZip" style="background:#1f8f57">🗂 Download Complete Package (.zip)</button>
         <div id="exportLinks" class="text-sm space-y-1"></div>
@@ -792,6 +848,132 @@ function wireMarkupCanvas() {
   canvas.addEventListener('pointercancel', finish);
 }
 
+/* =========================== Geo / Site Map =========================== */
+function geoPoints() {
+  return state.trees
+    .map((t, i) => ({ i, t, lat: parseFloat(t.gps.lat), lng: parseFloat(t.gps.lng) }))
+    .filter(p => isFinite(p.lat) && isFinite(p.lng));
+}
+function toLocalXY(lat, lng, originLat, originLng) {
+  const R = 6371000;
+  const dLat = (lat - originLat) * Math.PI / 180;
+  const dLng = (lng - originLng) * Math.PI / 180;
+  return { x: dLng * Math.cos(originLat * Math.PI / 180) * R, y: dLat * R };
+}
+function niceRoundScale(v) {
+  if (v <= 0) return 5;
+  const pow = Math.pow(10, Math.floor(Math.log10(v)));
+  const n = v / pow;
+  return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * pow;
+}
+function renderSiteMapCanvas(width = 600, height = 440) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#eafbf0'; ctx.fillRect(0, 0, width, height);
+
+  const pts = geoPoints();
+  if (!pts.length) {
+    ctx.fillStyle = '#1f4d36'; ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('No GPS coordinates captured yet', width / 2, height / 2);
+    return canvas;
+  }
+
+  const originLat = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
+  const originLng = pts.reduce((s, p) => s + p.lng, 0) / pts.length;
+  const xy = pts.map(p => Object.assign({}, p, toLocalXY(p.lat, p.lng, originLat, originLng)));
+
+  const pad = 50;
+  const xs = xy.map(p => p.x), ys = xy.map(p => p.y);
+  let minX = Math.min(...xs, -5), maxX = Math.max(...xs, 5);
+  let minY = Math.min(...ys, -5), maxY = Math.max(...ys, 5);
+  const span = Math.max(maxX - minX, maxY - minY, 10);
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  minX = cx - span / 2; maxX = cx + span / 2; minY = cy - span / 2; maxY = cy + span / 2;
+
+  function project(x, y) {
+    return [
+      pad + (x - minX) / (maxX - minX) * (width - 2 * pad),
+      height - pad - (y - minY) / (maxY - minY) * (height - 2 * pad)
+    ];
+  }
+
+  ctx.strokeStyle = '#a6e7c1'; ctx.lineWidth = 1;
+  ctx.strokeRect(pad, pad, width - 2 * pad, height - 2 * pad);
+
+  const scaleMeters = niceRoundScale(span / 4);
+  const scalePx = scaleMeters / (maxX - minX) * (width - 2 * pad);
+  ctx.strokeStyle = '#1f4d36'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(pad, height - 20); ctx.lineTo(pad + scalePx, height - 20); ctx.stroke();
+  ctx.fillStyle = '#1f4d36'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(`${scaleMeters} m`, pad, height - 26);
+
+  ctx.save();
+  ctx.translate(width - 30, 36);
+  ctx.strokeStyle = '#1f4d36'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, 14); ctx.lineTo(0, -14); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(-5, -5); ctx.lineTo(5, -5); ctx.closePath();
+  ctx.fillStyle = '#1f4d36'; ctx.fill();
+  ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('N', 0, -18);
+  ctx.restore();
+
+  xy.forEach(p => {
+    const [px, py] = project(p.x, p.y);
+    ctx.beginPath(); ctx.arc(px, py, 10, 0, Math.PI * 2);
+    ctx.fillStyle = '#1f8f57'; ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(p.i + 1), px, py + 1);
+    ctx.fillStyle = '#0f2e1e'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText((p.t.species || 'Tree ' + (p.i + 1)).slice(0, 18), px, py + 22);
+  });
+  return canvas;
+}
+
+function taskSummaryLine(t) {
+  return t.tasks.map(x => (x.type === 'Other' ? (x.customType || 'Other') : x.type) + (x.hours ? ` [${x.hours}h]` : '')).join('; ');
+}
+
+function buildGeoJSON() {
+  return {
+    type: 'FeatureCollection',
+    features: state.trees.map((t, i) => {
+      const lat = parseFloat(t.gps.lat), lng = parseFloat(t.gps.lng);
+      return {
+        type: 'Feature',
+        geometry: (isFinite(lat) && isFinite(lng)) ? { type: 'Point', coordinates: [lng, lat] } : null,
+        properties: {
+          treeNumber: i + 1,
+          species: t.species || '',
+          dbh: t.dbh || '',
+          heightEstimate: t.height || '',
+          location: t.location || '',
+          gpsAccuracyMeters: t.gps.accuracy || null,
+          tasks: taskSummaryLine(t),
+          estimatedHours: t.tasks.reduce((s, x) => s + (parseFloat(x.hours) || 0), 0),
+          photoCount: t.photos.length
+        }
+      };
+    })
+  };
+}
+
+function csvEscape(v) {
+  v = String(v == null ? '' : v);
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function buildCsv() {
+  const headers = ['Tree#', 'Species', 'DBH', 'HeightEstimate', 'Location', 'Latitude', 'Longitude', 'GPSAccuracy_m', 'Tasks', 'EstHours', 'PhotoCount'];
+  const rows = state.trees.map((t, i) => [
+    i + 1, t.species, t.dbh, t.height, t.location,
+    t.gps.lat || '', t.gps.lng || '', t.gps.accuracy ? Math.round(t.gps.accuracy) : '',
+    taskSummaryLine(t), t.tasks.reduce((s, x) => s + (parseFloat(x.hours) || 0), 0).toFixed(2), t.photos.length
+  ]);
+  return [headers, ...rows].map(r => r.map(csvEscape).join(',')).join('\r\n');
+}
+
 /* =========================== PDF generation =========================== */
 function fitBox(w, h, maxW, maxH) {
   const ratio = Math.min(maxW / w, maxH / h);
@@ -944,6 +1126,41 @@ async function buildPdf() {
   doc.text(`Grand Total Estimated Labor Hours: ${grandTotal.toFixed(2)}`, MARGIN, y);
   y += 24;
 
+  heading('Site Map & GPS Reference');
+  const gc1 = 32, gc2 = 160, gc3 = (CONTENT_W - gc1 - gc2) / 2;
+  ensure(18);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(255);
+  doc.setFillColor(31, 77, 54); doc.rect(MARGIN, y, CONTENT_W, 18, 'F');
+  doc.text('#', MARGIN + 6, y + 12);
+  doc.text('SPECIES', MARGIN + gc1 + 6, y + 12);
+  doc.text('LATITUDE', MARGIN + gc1 + gc2 + 6, y + 12);
+  doc.text('LONGITUDE', MARGIN + gc1 + gc2 + gc3 + 6, y + 12);
+  y += 18;
+  state.trees.forEach((t, i) => {
+    const rowH = 16;
+    ensure(rowH);
+    if (i % 2 === 0) { doc.setFillColor(238, 246, 241); doc.rect(MARGIN, y, CONTENT_W, rowH, 'F'); }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(20);
+    doc.text(String(i + 1), MARGIN + 6, y + 11);
+    doc.text((t.species || 'Unspecified').slice(0, 26), MARGIN + gc1 + 6, y + 11);
+    doc.text(t.gps.lat ? String(t.gps.lat) : '—', MARGIN + gc1 + gc2 + 6, y + 11);
+    doc.text(t.gps.lng ? String(t.gps.lng) + (t.gps.accuracy ? `  (±${Math.round(t.gps.accuracy)}m)` : '') : '—', MARGIN + gc1 + gc2 + gc3 + 6, y + 11);
+    y += rowH;
+  });
+  if (!state.trees.length) { doc.setFontSize(10); doc.setTextColor(100); doc.text('No trees recorded.', MARGIN, y + 10); y += 16; }
+  y += 10;
+
+  const mapCanvas = renderSiteMapCanvas(900, 660);
+  const mapFit = fitBox(mapCanvas.width, mapCanvas.height, CONTENT_W, 320);
+  ensure(mapFit.h + 20);
+  doc.setDrawColor(199, 227, 211); doc.setLineWidth(1);
+  doc.rect(MARGIN, y, mapFit.w, mapFit.h);
+  try { doc.addImage(mapCanvas.toDataURL('image/png'), 'PNG', MARGIN, y, mapFit.w, mapFit.h); } catch (e) {}
+  y += mapFit.h + 10;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(110);
+  doc.text('Positions are relative to one another (derived from captured GPS), not an absolute surveyed map.', MARGIN, y);
+  y += 18;
+
   const wp = state.workPlan;
   heading('Work Plan & Logistics Summary');
   labelValue('Crew Size', wp.crewSize);
@@ -1013,13 +1230,16 @@ async function exportZip() {
   const clientSlug = slugify(state.client.clientName || 'Client');
   const date = state.client.inspectionDate || todayISO();
   zip.file(reportFilename('pdf'), pdfBlob);
+  zip.file(`Trees_${clientSlug}_${date}.geojson`, JSON.stringify(buildGeoJSON(), null, 2));
+  zip.file(`Trees_${clientSlug}_${date}.csv`, buildCsv());
+  const photosFolder = zip.folder('Photos');
   state.trees.forEach((t, idx) => {
     const treeNum = String(idx + 1).padStart(2, '0');
     const speciesSlug = slugify(t.species || 'Tree');
     t.photos.forEach((p, pi) => {
       const suffix = t.photos.length > 1 ? `_${pi + 1}` : '';
-      zip.file(`Tree_${treeNum}_${speciesSlug}${suffix}.jpg`, dataURLtoBlob(p.originalDataUrl));
-      if (p.hasMarkup) zip.file(`Tree_${treeNum}_${speciesSlug}${suffix}_markup.jpg`, dataURLtoBlob(p.markupDataUrl));
+      photosFolder.file(`Tree_${treeNum}_${speciesSlug}${suffix}.jpg`, dataURLtoBlob(p.originalDataUrl));
+      if (p.hasMarkup) photosFolder.file(`Tree_${treeNum}_${speciesSlug}${suffix}_markup.jpg`, dataURLtoBlob(p.markupDataUrl));
     });
   });
   const blob = await zip.generateAsync({ type: 'blob' });
@@ -1092,6 +1312,9 @@ document.addEventListener('click', async e => {
 
   const remarkP = el.closest('[data-remark-photo]');
   if (remarkP) { const [treeId, photoId] = remarkP.dataset.remarkPhoto.split(':'); openMarkupModal(treeId, photoId); return; }
+
+  const capGps = el.closest('[data-capture-gps]');
+  if (capGps) { captureGps(capGps.dataset.captureGps); return; }
 
   const takePhoto = el.closest('[data-take-photo]');
   if (takePhoto) {
@@ -1197,6 +1420,7 @@ async function init() {
       if (raw) state = Object.assign(defaultState(), JSON.parse(raw));
     } catch (e2) {}
   }
+  state.trees.forEach(t => { if (!t.gps) t.gps = { lat: '', lng: '', accuracy: null, capturedAt: null }; });
 
   wireMarkupCanvas();
   renderAll();
