@@ -147,7 +147,7 @@ function newState(){
     equipment: {
       bucketTruck:'None', chipper:'None', chipTruck:'None', extraChipTruck:'No',
       crane:{ needed:false, spec:'', price:'' },
-      stumpGrinder:'None', miniLoader:'None',
+      stumpGrinder:'None', miniLoader:'None', shuttleVehicle:'No',
       spyderLift:{ needed:false, price:'' }
     },
     workPlan: '',
@@ -585,6 +585,10 @@ function renderStepLogistics(){
         <label><span class="block text-xs font-medium text-slate-500 mb-1">Mini Loader</span>
           <select data-bind="equipment.miniLoader" class="w-full border border-slate-300 rounded-lg px-2 py-2">
             ${['None','ML1','ML2'].map(o=>`<option ${eq.miniLoader===o?'selected':''}>${o}</option>`).join('')}
+          </select></label>
+        <label class="col-span-2"><span class="block text-xs font-medium text-slate-500 mb-1">Shuttle Vehicle</span>
+          <select data-bind="equipment.shuttleVehicle" class="w-full border border-slate-300 rounded-lg px-2 py-2">
+            ${['No','Yes'].map(o=>`<option ${eq.shuttleVehicle===o?'selected':''}>${o}</option>`).join('')}
           </select></label>
       </div>
 
@@ -1526,6 +1530,7 @@ async function buildMainPdfDoc(){
   if(eq.crane.needed) p('Crane: '+(eq.crane.spec||'Yes'));
   if(eq.stumpGrinder!=='None') p('Stump Grinder: '+eq.stumpGrinder);
   if(eq.miniLoader!=='None') p('Mini Loader: '+eq.miniLoader);
+  if(eq.shuttleVehicle==='Yes') p('Shuttle Vehicle: Yes');
   if(eq.spyderLift.needed) p('Spyder Lift: Yes');
   p('Crew Details: '+(state.client.crewSize||'-'));
   y+=6;
@@ -1595,6 +1600,7 @@ function buildNotecardDoc(){
   if(eq.crane.needed) eqLines.push('Crane '+(eq.crane.spec||''));
   if(eq.stumpGrinder!=='None') eqLines.push('Stump Grinder '+eq.stumpGrinder);
   if(eq.miniLoader!=='None') eqLines.push('Mini Loader '+eq.miniLoader);
+  if(eq.shuttleVehicle==='Yes') eqLines.push('Shuttle Vehicle');
   if(eq.spyderLift.needed) eqLines.push('Spyder Lift');
   line(eqLines.join(', ')||'None', 8);
   y += 0.04;
