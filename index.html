@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Arborist Field Inspection</title>
+
+<meta name="theme-color" content="#1f4d36">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TreeInspect">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          brand: {
+            50: '#eafbf0', 100: '#d2f3e0', 200: '#a6e7c1', 300: '#71d69d',
+            400: '#3fbd79', 500: '#1f8f57', 600: '#1f4d36', 700: '#173d2b',
+            800: '#122f22', 900: '#0f2e1e'
+          }
+        }
+      }
+    }
+  };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<style>
+  html, body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; }
+  body { background: #f3f6f4; color: #0f2e1e; padding-bottom: env(safe-area-inset-bottom); }
+  html.dark body { background: #0f2e1e; color: #eafbf0; }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .tap { min-height: 52px; }
+  input, select, textarea {
+    font-size: 16px; /* prevents iOS auto-zoom on focus */
+  }
+  input[type="range"] { -webkit-appearance: none; height: 6px; border-radius: 4px; background: #a6e7c1; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%;
+    background: #1f4d36; border: 3px solid white; box-shadow: 0 1px 3px rgba(0,0,0,.4);
+  }
+  html.dark input[type="range"] { background: #173d2b; }
+  html.dark input[type="range"]::-webkit-slider-thumb { background: #3fbd79; border-color: #0f2e1e; }
+  #markupCanvas { touch-action: none; background: #000; }
+  .field-label { font-weight: 600; font-size: 0.8rem; letter-spacing: .02em; text-transform: uppercase; opacity: .7; }
+  .field-input {
+    width: 100%; border-radius: 0.75rem; border: 2px solid #c7e3d3; background: white;
+    padding: 0.85rem 1rem; color: #0f2e1e;
+  }
+  html.dark .field-input { background: #173d2b; border-color: #2a5c41; color: #eafbf0; }
+  .field-input:focus { outline: none; border-color: #1f8f57; box-shadow: 0 0 0 3px rgba(31,143,87,.25); }
+  .btn-primary {
+    background: #1f4d36; color: white; font-weight: 700; border-radius: 1rem;
+    padding: 1rem 1.25rem; box-shadow: 0 2px 8px rgba(15,46,30,.25);
+  }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-primary:disabled { opacity: .45; }
+  .btn-secondary {
+    background: transparent; color: #1f4d36; font-weight: 700; border-radius: 1rem;
+    padding: 1rem 1.25rem; border: 2px solid #1f4d36;
+  }
+  html.dark .btn-secondary { color: #a6e7c1; border-color: #a6e7c1; }
+  .btn-danger { background: #fdecec; color: #9b1c1c; font-weight: 700; border-radius: 0.75rem; padding: .6rem .9rem; }
+  html.dark .btn-danger { background: #3a1616; color: #ff9b9b; }
+  .card { background: white; border-radius: 1.1rem; box-shadow: 0 1px 6px rgba(15,46,30,.12); }
+  html.dark .card { background: #122f22; box-shadow: none; border: 1px solid #1f4d36; }
+  .chip {
+    display: inline-flex; align-items: center; gap: .4rem; padding: .55rem .9rem; border-radius: 999px;
+    border: 2px solid #c7e3d3; font-weight: 600; font-size: .85rem; cursor: pointer; user-select: none;
+  }
+  .chip.active { background: #1f4d36; color: white; border-color: #1f4d36; }
+  html.dark .chip { border-color: #2a5c41; }
+  html.dark .chip.active { background: #3fbd79; color: #0f2e1e; border-color: #3fbd79; }
+  .hidden { display: none !important; }
+  .toast {
+    position: fixed; bottom: calc(1rem + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+    background: #0f2e1e; color: #eafbf0; padding: .7rem 1.1rem; border-radius: .8rem; font-size: .9rem;
+    z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,.35); opacity: 0; transition: opacity .25s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #a6e7c1; border-radius: 3px; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<header class="safe-top sticky top-0 z-30 bg-brand-700 text-white shadow-md">
+  <div class="flex items-center justify-between px-4 py-3">
+    <div class="flex items-center gap-2">
+      <div class="text-2xl">🌳</div>
+      <div>
+        <div class="font-bold leading-tight">TreeInspect</div>
+        <div id="statusLine" class="text-[11px] text-brand-200 leading-tight">Starting…</div>
+      </div>
+    </div>
+    <button id="themeToggle" class="tap px-3 rounded-xl bg-brand-600 active:bg-brand-500 text-lg">🌓</button>
+  </div>
+  <nav id="stepNav" class="grid grid-cols-4 text-center text-xs font-semibold border-t border-brand-600"></nav>
+</header>
+
+<main id="app" class="max-w-2xl mx-auto px-4 py-5 pb-28"></main>
+
+<div id="toast" class="toast"></div>
+
+<!-- Confirm modal -->
+<div id="confirmModal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
+  <div class="card w-full max-w-sm p-5">
+    <div id="confirmTitle" class="font-bold text-lg mb-1"></div>
+    <div id="confirmBody" class="text-sm opacity-80 mb-4"></div>
+    <div class="flex gap-3">
+      <button id="confirmCancel" class="btn-secondary flex-1 tap">Cancel</button>
+      <button id="confirmOk" class="btn-primary flex-1 tap" style="background:#9b1c1c">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Photo markup modal -->
+<div id="markupModal" class="hidden fixed inset-0 z-50 bg-black flex flex-col">
+  <div class="flex items-center justify-between px-4 py-3 text-white safe-top">
+    <div class="font-bold">Mark Up Photo</div>
+    <button id="markupClose" class="tap px-3 text-2xl leading-none">✕</button>
+  </div>
+  <div class="flex-1 flex items-center justify-center overflow-hidden p-2">
+    <canvas id="markupCanvas" class="max-w-full max-h-full rounded-lg"></canvas>
+  </div>
+  <div class="px-3 pb-2">
+    <div class="flex gap-2 justify-center mb-2" id="markupTools"></div>
+    <div class="flex gap-2 justify-center mb-2" id="markupColors"></div>
+    <div class="flex items-center gap-3 px-2 mb-3 text-white text-xs">
+      <span>Thin</span>
+      <input id="markupWidth" type="range" min="2" max="18" value="6" class="flex-1">
+      <span>Thick</span>
+    </div>
+  </div>
+  <div class="grid grid-cols-4 gap-2 px-3 pb-3" style="padding-bottom: calc(.75rem + env(safe-area-inset-bottom));">
+    <button id="markupUndo" class="btn-secondary tap text-white border-white col-span-1 text-sm">↩ Undo</button>
+    <button id="markupClear" class="btn-secondary tap text-white border-white col-span-1 text-sm">🗑 Clear</button>
+    <button id="markupCancel" class="btn-secondary tap text-white border-white col-span-1 text-sm">Cancel</button>
+    <button id="markupSave" class="btn-primary tap col-span-1 text-sm">✓ Save</button>
+  </div>
+</div>
+
+<datalist id="speciesList"></datalist>
+
+<script>
+/* =========================== Constants =========================== */
+const STORAGE_KEY = 'arborist_inspection_v1';
+const DB_NAME = 'arborist-field-inspection';
+const DB_STORE = 'drafts';
+
+const SPECIES_OPTIONS = [
+  'Red Oak','White Oak','Bur Oak','Pin Oak','Sugar Maple','Red Maple','Silver Maple',
+  'Norway Maple','Japanese Maple','River Birch','American Elm','Honeylocust',
+  'Littleleaf Linden','Flowering Pear (Callery)','Flowering Dogwood','Eastern Redbud',
+  'Colorado Blue Spruce','Norway Spruce','White Pine','Austrian Pine','Arborvitae',
+  'Crabapple','Magnolia','Tulip Poplar','Black Walnut','Hackberry','American Sycamore',
+  'Green Ash','White Ash','Shagbark Hickory','Weeping Willow','Eastern Red Cedar',
+  'Boxwood (shrub)','Burning Bush (shrub)','Serviceberry','Sweetgum','Kousa Dogwood'
+];
+
+const TASK_TYPES = [
+  'Structural Pruning','Crown Cleaning','Crown Thinning','Crown Raising','Crown Reduction',
+  'Deadwooding / Deadwood Removal','Cabling & Bracing','Root Collar Excavation','Root Pruning',
+  'Cavity / Decay Treatment','PHC – Soil Injection','PHC – Foliar Spray','PHC – Deep Root Fertilization',
+  'Insect / Disease Treatment','Tree Removal','Stump Grinding','Mulching','Lightning Protection System',
+  'Risk Mitigation – Target Reduction','Other'
+];
+
+const EQUIPMENT_OPTIONS = [
+  'Bucket Truck','Chipper','Crane','Stump Grinder','Climbing Gear','Chainsaws (ground)',
+  'Aerial Lift','Mini Skid Steer / Mulcher','Dump Truck & Trailer'
+];
+
+/* =========================== Persistence (IndexedDB) =========================== */
+let dbPromise = null;
+function openDb() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE, { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbPromise;
+}
+function dbPut(value) {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const req = db.transaction([DB_STORE], 'readwrite').objectStore(DB_STORE).put(value);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  }));
+}
+function dbGet(id) {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const req = db.transaction([DB_STORE], 'readonly').objectStore(DB_STORE).get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  }));
+}
+function dbDelete(id) {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const req = db.transaction([DB_STORE], 'readwrite').objectStore(DB_STORE).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  }));
+}
+
+let persistTimer = null;
+function schedulePersist() {
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    dbPut({ id: 'current', state }).then(() => flashToast('Saved ✓')).catch(() => {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+    });
+  }, 400);
+}
+
+/* =========================== State =========================== */
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+function defaultState() {
+  return {
+    step: 1,
+    client: {
+      companyName: '', clientName: '', propertyAddress: '', contactName: '',
+      contactPhone: '', contactEmail: '', inspectionDate: todayISO(),
+      arboristName: '', credentials: 'ISA Board Certified Master Arborist', certNumber: ''
+    },
+    trees: [],
+    workPlan: {
+      crewSize: '', equipment: [], equipmentOther: '', trafficControl: '',
+      neighborPermission: 'no', neighborNotes: '', permits: '', safetyConcerns: '',
+      crewNotes: '', clientNotes: '', adminNotes: '', schedulingPrefs: ''
+    }
+  };
+}
+
+let state = defaultState();
+
+function setByPath(obj, path, value) {
+  const parts = path.split('.');
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const key = /^\d+$/.test(parts[i]) ? Number(parts[i]) : parts[i];
+    cur = cur[key];
+  }
+  const lastKey = /^\d+$/.test(parts[parts.length - 1]) ? Number(parts[parts.length - 1]) : parts[parts.length - 1];
+  cur[lastKey] = value;
+}
+function getByPath(obj, path) {
+  return path.split('.').reduce((cur, k) => (cur == null ? cur : cur[/^\d+$/.test(k) ? Number(k) : k]), obj);
+}
+
+/* =========================== Small UI helpers =========================== */
+function flashToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+function confirmDialog(title, body) {
+  return new Promise(resolve => {
+    const modal = document.getElementById('confirmModal');
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmBody').textContent = body;
+    modal.classList.remove('hidden');
+    const ok = document.getElementById('confirmOk');
+    const cancel = document.getElementById('confirmCancel');
+    function cleanup(result) {
+      modal.classList.add('hidden');
+      ok.removeEventListener('click', onOk);
+      cancel.removeEventListener('click', onCancel);
+      resolve(result);
+    }
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    ok.addEventListener('click', onOk);
+    cancel.addEventListener('click', onCancel);
+  });
+}
+
+function slugify(s) {
+  return (s || '').toString().trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'Unnamed';
+}
+function esc(s) {
+  return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* =========================== Step nav / routing =========================== */
+const STEP_LABELS = ['Client & Site', 'Trees', 'Work Plan', 'Review & Export'];
+
+function renderStepNav() {
+  const nav = document.getElementById('stepNav');
+  nav.innerHTML = STEP_LABELS.map((label, i) => {
+    const n = i + 1;
+    const active = state.step === n;
+    return `<button data-goto-step="${n}" class="tap py-2 ${active ? 'bg-brand-800 text-white' : 'text-brand-200'}">${n}. ${label}</button>`;
+  }).join('');
+}
+
+function goToStep(n) {
+  state.step = n;
+  schedulePersist();
+  renderAll();
+  window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+}
+
+function renderAll() {
+  renderStepNav();
+  const app = document.getElementById('app');
+  if (state.step === 1) app.innerHTML = renderStep1();
+  else if (state.step === 2) app.innerHTML = renderStep2();
+  else if (state.step === 3) app.innerHTML = renderStep3();
+  else app.innerHTML = renderStep4();
+  updateTotals();
+}
+
+/* =========================== Step 1: Client & Site =========================== */
+function renderStep1() {
+  const c = state.client;
+  const field = (label, path, placeholder = '', type = 'text') => `
+    <div>
+      <label class="field-label">${label}</label>
+      <input class="field-input mt-1" type="${type}" data-bind="client.${path}" value="${esc(getByPath(state, 'client.' + path))}" placeholder="${esc(placeholder)}">
+    </div>`;
+  return `
+    <div class="space-y-4">
+      <div class="card p-4">
+        <h2 class="font-bold text-lg mb-3">Client &amp; Site Information</h2>
+        <div class="grid grid-cols-1 gap-3">
+          ${field('Company / Firm Name (optional)', 'companyName', 'e.g. RTEC Treecare')}
+          ${field('Client Name', 'clientName', 'Jane Smith')}
+          ${field('Property Address', 'propertyAddress', '123 Maple St, Springfield')}
+          ${field('Contact Name', 'contactName', 'If different from client')}
+          <div class="grid grid-cols-2 gap-3">
+            ${field('Contact Phone', 'contactPhone', '(555) 555-5555', 'tel')}
+            ${field('Contact Email', 'contactEmail', 'name@email.com', 'email')}
+          </div>
+          ${field('Inspection Date', 'inspectionDate', '', 'date')}
+        </div>
+      </div>
+      <div class="card p-4">
+        <h2 class="font-bold text-lg mb-3">Arborist</h2>
+        <div class="grid grid-cols-1 gap-3">
+          ${field('Arborist Name', 'arboristName', 'Your name')}
+          ${field('Credentials', 'credentials', 'ISA Board Certified Master Arborist')}
+          ${field('ISA Certification Number (optional)', 'certNumber', 'e.g. MA-1234A')}
+        </div>
+      </div>
+      <button class="btn-primary w-full tap" data-next-from-1>Next: Tree Inventory →</button>
+    </div>`;
+}
+
+/* =========================== Step 2: Tree Inventory =========================== */
+function addTree() {
+  state.trees.forEach(t => t.expanded = false);
+  state.trees.push({
+    id: uid(), species: '', dbh: '', height: '', location: '',
+    photos: [], tasks: [], expanded: true
+  });
+  schedulePersist();
+  renderAll();
+  setTimeout(() => {
+    const el = document.querySelector(`[data-tree-anchor="${state.trees[state.trees.length - 1].id}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 30);
+}
+
+function toggleTree(id) {
+  const t = state.trees.find(x => x.id === id);
+  t.expanded = !t.expanded;
+  renderAll();
+}
+
+async function removeTree(id) {
+  const ok = await confirmDialog('Delete this tree?', 'This removes its photos and work items. This cannot be undone.');
+  if (!ok) return;
+  state.trees = state.trees.filter(x => x.id !== id);
+  schedulePersist();
+  renderAll();
+}
+
+function addTask(treeId) {
+  const t = state.trees.find(x => x.id === treeId);
+  t.tasks.push({ id: uid(), type: TASK_TYPES[0], customType: '', details: '', hours: '' });
+  schedulePersist();
+  renderAll();
+}
+function removeTask(treeId, taskId) {
+  const t = state.trees.find(x => x.id === treeId);
+  t.tasks = t.tasks.filter(x => x.id !== taskId);
+  schedulePersist();
+  renderAll();
+}
+async function removePhoto(treeId, photoId) {
+  const ok = await confirmDialog('Remove this photo?', 'This cannot be undone.');
+  if (!ok) return;
+  const t = state.trees.find(x => x.id === treeId);
+  t.photos = t.photos.filter(p => p.id !== photoId);
+  schedulePersist();
+  renderAll();
+}
+
+function renderTreeCard(t, idx) {
+  const subtotal = t.tasks.reduce((s, x) => s + (parseFloat(x.hours) || 0), 0);
+  if (!t.expanded) {
+    return `
+      <div class="card p-4 flex items-center justify-between" data-tree-anchor="${t.id}">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold">${idx + 1}</div>
+          <div class="min-w-0">
+            <div class="font-bold truncate">${esc(t.species) || 'Unspecified Species'}</div>
+            <div class="text-xs opacity-60 truncate">${esc(t.location) || 'No location set'} · ${t.photos.length} photo(s) · ${t.tasks.length} task(s)</div>
+          </div>
+        </div>
+        <button class="btn-secondary tap px-3 text-sm" data-toggle-tree="${t.id}">Edit</button>
+      </div>`;
+  }
+
+  const photosHtml = t.photos.map(p => `
+    <div class="relative shrink-0 w-28">
+      <img src="${p.hasMarkup ? p.markupDataUrl : p.originalDataUrl}" class="w-28 h-28 object-cover rounded-xl border-2 border-brand-200">
+      <div class="flex gap-1 mt-1">
+        <button class="flex-1 text-xs btn-secondary py-1 rounded-lg" data-remark-photo="${t.id}:${p.id}">✎ Edit</button>
+        <button class="text-xs btn-danger py-1" data-remove-photo="${t.id}:${p.id}">✕</button>
+      </div>
+    </div>`).join('');
+
+  const tasksHtml = t.tasks.map(task => `
+    <div class="card p-3 space-y-2" style="border:1px solid #c7e3d3">
+      <select class="field-input" data-bind="trees.${idx}.tasks.${t.tasks.indexOf(task)}.type">
+        ${TASK_TYPES.map(opt => `<option value="${opt}" ${opt === task.type ? 'selected' : ''}>${opt}</option>`).join('')}
+      </select>
+      ${task.type === 'Other' ? `<input class="field-input" placeholder="Describe task type" data-bind="trees.${idx}.tasks.${t.tasks.indexOf(task)}.customType" value="${esc(task.customType)}">` : ''}
+      <textarea class="field-input" rows="2" placeholder="Task details / specifics" data-bind="trees.${idx}.tasks.${t.tasks.indexOf(task)}.details">${esc(task.details)}</textarea>
+      <div class="flex items-center gap-2">
+        <label class="field-label shrink-0">Est. Hours</label>
+        <input class="field-input" type="number" min="0" step="0.25" placeholder="0.0" data-bind="trees.${idx}.tasks.${t.tasks.indexOf(task)}.hours" data-recalc="${t.id}" value="${esc(task.hours)}">
+        <button class="btn-danger tap shrink-0" data-remove-task="${t.id}:${task.id}">🗑</button>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="card p-4 space-y-4" data-tree-anchor="${t.id}">
+      <div class="flex items-center justify-between">
+        <div class="font-bold text-lg">Tree ${idx + 1}</div>
+        <div class="flex gap-2">
+          <button class="btn-secondary tap px-3 text-sm" data-toggle-tree="${t.id}">Collapse</button>
+          <button class="btn-danger tap" data-remove-tree="${t.id}">🗑 Delete</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-3">
+        <div>
+          <label class="field-label">Species / Tree Type</label>
+          <input class="field-input mt-1" list="speciesList" data-bind="trees.${idx}.species" value="${esc(t.species)}" placeholder="e.g. Red Oak">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="field-label">DBH</label><input class="field-input mt-1" data-bind="trees.${idx}.dbh" value="${esc(t.dbh)}" placeholder='e.g. 18"'></div>
+          <div><label class="field-label">Height Est.</label><input class="field-input mt-1" data-bind="trees.${idx}.height" value="${esc(t.height)}" placeholder="e.g. 45 ft"></div>
+        </div>
+        <div>
+          <label class="field-label">Location on Landscape</label>
+          <input class="field-input mt-1" data-bind="trees.${idx}.location" value="${esc(t.location)}" placeholder="e.g. Front yard, right of walkway">
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="field-label">Photos</label>
+          <div class="flex gap-2">
+            <button class="chip" data-take-photo="${t.id}">📷 Take Photo</button>
+            <button class="chip" data-choose-photo="${t.id}">🖼 Choose</button>
+          </div>
+        </div>
+        <div class="flex gap-2 overflow-x-auto pb-1">${photosHtml || '<div class="text-sm opacity-60 py-2">No photos yet.</div>'}</div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="field-label">Work Tasks</label>
+          <div class="text-sm font-bold">Subtotal: <span id="subtotal-${t.id}">${subtotal.toFixed(1)}</span> hrs</div>
+        </div>
+        <div class="space-y-2">${tasksHtml || '<div class="text-sm opacity-60 py-2">No tasks added yet.</div>'}</div>
+        <button class="btn-secondary w-full tap mt-2" data-add-task="${t.id}">+ Add Work Task</button>
+      </div>
+    </div>`;
+}
+
+function renderStep2() {
+  const treesHtml = state.trees.map((t, i) => renderTreeCard(t, i)).join('');
+  return `
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-bold text-lg">Tree &amp; Landscape Inventory</h2>
+        <div class="text-sm font-bold">Total: <span id="grand-total-step2">0.0</span> hrs</div>
+      </div>
+      ${treesHtml}
+      <button class="btn-secondary w-full tap" data-add-tree>+ Add Another Tree</button>
+      <div class="flex gap-3 pt-2">
+        <button class="btn-secondary flex-1 tap" data-goto-step="1">← Back</button>
+        <button class="btn-primary flex-1 tap" data-goto-step-confirm="3">Proceed to Work Plan →</button>
+      </div>
+      <input type="file" id="fileCamera" accept="image/*" capture="environment" class="hidden">
+      <input type="file" id="fileLibrary" accept="image/*" class="hidden">
+    </div>`;
+}
+
+/* =========================== Step 3: Work Plan & Logistics =========================== */
+function renderStep3() {
+  const wp = state.workPlan;
+  const equipmentChips = EQUIPMENT_OPTIONS.map(opt => `
+    <button type="button" class="chip ${wp.equipment.includes(opt) ? 'active' : ''}" data-toggle-equipment="${esc(opt)}">${opt}</button>
+  `).join('');
+  const area = (label, path, placeholder) => `
+    <div>
+      <label class="field-label">${label}</label>
+      <textarea class="field-input mt-1" rows="3" data-bind="workPlan.${path}" placeholder="${esc(placeholder)}">${esc(getByPath(state, 'workPlan.' + path))}</textarea>
+    </div>`;
+
+  return `
+    <div class="space-y-4">
+      <div class="card p-4 space-y-3">
+        <h2 class="font-bold text-lg">Crew &amp; Equipment</h2>
+        <div>
+          <label class="field-label">Crew Size</label>
+          <input class="field-input mt-1" data-bind="workPlan.crewSize" value="${esc(wp.crewSize)}" placeholder="e.g. 3-person crew">
+        </div>
+        <div>
+          <label class="field-label">Required Equipment</label>
+          <div class="flex flex-wrap gap-2 mt-1">${equipmentChips}</div>
+          <input class="field-input mt-2" data-bind="workPlan.equipmentOther" value="${esc(wp.equipmentOther)}" placeholder="Other equipment (free text)">
+        </div>
+        ${area('Traffic Control Requirements', 'trafficControl', 'Cones, flaggers, street closure, etc.')}
+      </div>
+
+      <div class="card p-4 space-y-3">
+        <h2 class="font-bold text-lg">Access &amp; Permits</h2>
+        <div>
+          <label class="field-label">Neighbor Permission Needed?</label>
+          <div class="flex gap-2 mt-1">
+            <button type="button" class="chip ${wp.neighborPermission === 'yes' ? 'active' : ''}" data-set-neighbor="yes">Yes</button>
+            <button type="button" class="chip ${wp.neighborPermission === 'no' ? 'active' : ''}" data-set-neighbor="no">No</button>
+          </div>
+        </div>
+        ${area('Neighbor Permission Notes', 'neighborNotes', 'Which neighbor, contact info, status...')}
+        ${area('Required Permits', 'permits', 'e.g. City tree removal permit')}
+      </div>
+
+      <div class="card p-4 space-y-3">
+        <h2 class="font-bold text-lg">Safety</h2>
+        ${area('Arborist-Identified Safety Concerns', 'safetyConcerns', 'Power lines, slope, unstable footing, etc.')}
+      </div>
+
+      <div class="card p-4 space-y-3">
+        <h2 class="font-bold text-lg">Notes</h2>
+        ${area('Notes to the Crew (technical execution)', 'crewNotes', 'Internal instructions for the crew performing the work')}
+        ${area('Notes to the Client (scope explanation)', 'clientNotes', 'Professional, client-facing explanation of the proposed scope')}
+        ${area('Administrative Notes (office / billing)', 'adminNotes', 'Reminders for office / billing staff')}
+        ${area('Client Scheduling Preferences', 'schedulingPrefs', 'Preferred days, times, access windows...')}
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button class="btn-secondary flex-1 tap" data-goto-step="2">← Back</button>
+        <button class="btn-primary flex-1 tap" data-goto-step="4">Review &amp; Export →</button>
+      </div>
+    </div>`;
+}
+
+/* =========================== Step 4: Review & Export =========================== */
+function renderStep4() {
+  const c = state.client;
+  const wp = state.workPlan;
+  const grand = state.trees.reduce((s, t) => s + t.tasks.reduce((ss, x) => ss + (parseFloat(x.hours) || 0), 0), 0);
+  return `
+    <div class="space-y-4">
+      <div class="card p-4">
+        <div class="flex justify-between items-center mb-2">
+          <h2 class="font-bold text-lg">Client &amp; Site</h2>
+          <button class="btn-secondary tap px-3 text-sm" data-goto-step="1">Edit</button>
+        </div>
+        <div class="text-sm space-y-1 opacity-90">
+          <div><b>${esc(c.clientName) || '—'}</b></div>
+          <div>${esc(c.propertyAddress) || '—'}</div>
+          <div>${esc(c.contactPhone)} ${c.contactEmail ? '· ' + esc(c.contactEmail) : ''}</div>
+          <div>Inspection Date: ${esc(c.inspectionDate)}</div>
+          <div>Arborist: ${esc(c.arboristName)} — ${esc(c.credentials)}</div>
+        </div>
+      </div>
+
+      <div class="card p-4">
+        <div class="flex justify-between items-center mb-2">
+          <h2 class="font-bold text-lg">Trees (${state.trees.length})</h2>
+          <button class="btn-secondary tap px-3 text-sm" data-goto-step="2">Edit</button>
+        </div>
+        <div class="text-sm space-y-1 opacity-90">
+          ${state.trees.map((t, i) => `<div>${i + 1}. ${esc(t.species) || 'Unspecified'} — ${t.photos.length} photo(s), ${t.tasks.length} task(s)</div>`).join('') || '<div class="opacity-60">No trees added.</div>'}
+        </div>
+        <div class="mt-2 font-bold">Grand Total Est. Hours: ${grand.toFixed(1)}</div>
+      </div>
+
+      <div class="card p-4">
+        <div class="flex justify-between items-center mb-2">
+          <h2 class="font-bold text-lg">Work Plan</h2>
+          <button class="btn-secondary tap px-3 text-sm" data-goto-step="3">Edit</button>
+        </div>
+        <div class="text-sm space-y-1 opacity-90">
+          <div>Crew: ${esc(wp.crewSize) || '—'}</div>
+          <div>Equipment: ${[...wp.equipment, wp.equipmentOther].filter(Boolean).join(', ') || '—'}</div>
+          <div>Neighbor Permission: ${wp.neighborPermission === 'yes' ? 'Yes' : 'No'}</div>
+          <div>Permits: ${esc(wp.permits) || '—'}</div>
+        </div>
+      </div>
+
+      <div class="card p-4 space-y-3">
+        <h2 class="font-bold text-lg">Generate Deliverables</h2>
+        <p class="text-sm opacity-70">Produces a PDF report and a zipped media package (report + original/marked-up photos, named by tree &amp; species) for SingleOps proposal entry.</p>
+        <button class="btn-primary w-full tap" id="btnPdf">📄 Download PDF Report</button>
+        <button class="btn-primary w-full tap" id="btnZip" style="background:#1f8f57">🗂 Download Complete Package (.zip)</button>
+        <div id="exportLinks" class="text-sm space-y-1"></div>
+      </div>
+
+      <button class="btn-secondary w-full tap" id="btnNewInspection">↺ Start New Inspection</button>
+    </div>`;
+}
+
+function updateTotals() {
+  state.trees.forEach(t => {
+    const el = document.getElementById('subtotal-' + t.id);
+    if (el) el.textContent = t.tasks.reduce((s, x) => s + (parseFloat(x.hours) || 0), 0).toFixed(1);
+  });
+  const grandEl = document.getElementById('grand-total-step2');
+  if (grandEl) {
+    grandEl.textContent = state.trees.reduce((s, t) => s + t.tasks.reduce((ss, x) => ss + (parseFloat(x.hours) || 0), 0), 0).toFixed(1);
+  }
+}
+
+/* =========================== Photo capture + downscale =========================== */
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+function downscale(img, maxDim = 1800, quality = 0.85) {
+  let { width, height } = img;
+  if (width > maxDim || height > maxDim) {
+    if (width >= height) { height = Math.round(height * maxDim / width); width = maxDim; }
+    else { width = Math.round(width * maxDim / height); height = maxDim; }
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+  return { dataUrl: canvas.toDataURL('image/jpeg', quality), width, height };
+}
+
+let pendingTreeIdForPhoto = null;
+function handlePhotoFile(treeId, file) {
+  if (!file) return;
+  pendingTreeIdForPhoto = treeId;
+  loadImageFromFile(file).then(img => {
+    const { dataUrl, width, height } = downscale(img);
+    const photo = { id: uid(), originalDataUrl: dataUrl, markupDataUrl: null, hasMarkup: false, width, height };
+    const t = state.trees.find(x => x.id === treeId);
+    t.photos.push(photo);
+    schedulePersist();
+    renderAll();
+    openMarkupModal(treeId, photo.id);
+  }).catch(() => flashToast('Could not read photo'));
+}
+
+/* =========================== Markup canvas tool =========================== */
+const markup = {
+  treeId: null, photoId: null, baseImage: null, hadBaseMarkup: false,
+  strokes: [], current: null, tool: 'pen', color: '#ff2d2d', width: 6
+};
+
+function openMarkupModal(treeId, photoId) {
+  const t = state.trees.find(x => x.id === treeId);
+  const p = t.photos.find(x => x.id === photoId);
+  markup.treeId = treeId; markup.photoId = photoId; markup.strokes = []; markup.current = null;
+  markup.hadBaseMarkup = p.hasMarkup;
+
+  const img = new Image();
+  img.onload = () => {
+    markup.baseImage = img;
+    const canvas = document.getElementById('markupCanvas');
+    canvas.width = p.width; canvas.height = p.height;
+    redrawMarkup();
+    document.getElementById('markupModal').classList.remove('hidden');
+  };
+  img.src = p.hasMarkup ? p.markupDataUrl : p.originalDataUrl;
+
+  renderMarkupToolbar();
+}
+
+function renderMarkupToolbar() {
+  const tools = [['pen', '✏️ Pen'], ['arrow', '➡️ Arrow'], ['circle', '⭕ Circle']];
+  document.getElementById('markupTools').innerHTML = tools.map(([val, label]) =>
+    `<button type="button" class="chip ${markup.tool === val ? 'active' : ''}" data-markup-tool="${val}" style="color:white;border-color:white">${label}</button>`
+  ).join('');
+  const colors = ['#ff2d2d', '#ffd60a', '#00e0ff', '#ffffff'];
+  document.getElementById('markupColors').innerHTML = colors.map(c =>
+    `<button type="button" data-markup-color="${c}" style="background:${c};width:36px;height:36px;border-radius:50%;border:3px solid ${markup.color === c ? '#1f8f57' : 'rgba(255,255,255,.5)'}"></button>`
+  ).join('');
+  document.getElementById('markupWidth').value = markup.width;
+}
+
+function canvasPoint(evt) {
+  const canvas = document.getElementById('markupCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return [(evt.clientX - rect.left) * scaleX, (evt.clientY - rect.top) * scaleY];
+}
+
+function drawStroke(ctx, s) {
+  ctx.strokeStyle = s.color; ctx.fillStyle = s.color; ctx.lineWidth = s.width;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (s.tool === 'pen') {
+    ctx.beginPath();
+    s.points.forEach((pt, i) => i === 0 ? ctx.moveTo(pt[0], pt[1]) : ctx.lineTo(pt[0], pt[1]));
+    ctx.stroke();
+  } else if (s.tool === 'arrow') {
+    const [x1, y1, x2, y2] = [s.x1, s.y1, s.x2, s.y2];
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    const headLen = Math.max(14, s.width * 4);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 7), y2 - headLen * Math.sin(angle - Math.PI / 7));
+    ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 7), y2 - headLen * Math.sin(angle + Math.PI / 7));
+    ctx.closePath(); ctx.fill();
+  } else if (s.tool === 'circle') {
+    const cx = (s.x1 + s.x2) / 2, cy = (s.y1 + s.y2) / 2;
+    const rx = Math.abs(s.x2 - s.x1) / 2, ry = Math.abs(s.y2 - s.y1) / 2;
+    ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+function redrawMarkup() {
+  const canvas = document.getElementById('markupCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (markup.baseImage) ctx.drawImage(markup.baseImage, 0, 0, canvas.width, canvas.height);
+  markup.strokes.forEach(s => drawStroke(ctx, s));
+  if (markup.current) drawStroke(ctx, markup.current);
+}
+
+function wireMarkupCanvas() {
+  const canvas = document.getElementById('markupCanvas');
+  let drawing = false;
+  canvas.addEventListener('pointerdown', e => {
+    drawing = true;
+    const [x, y] = canvasPoint(e);
+    if (markup.tool === 'pen') markup.current = { tool: 'pen', color: markup.color, width: markup.width, points: [[x, y]] };
+    else markup.current = { tool: markup.tool, color: markup.color, width: markup.width, x1: x, y1: y, x2: x, y2: y };
+    redrawMarkup();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!drawing || !markup.current) return;
+    const [x, y] = canvasPoint(e);
+    if (markup.tool === 'pen') markup.current.points.push([x, y]);
+    else { markup.current.x2 = x; markup.current.y2 = y; }
+    redrawMarkup();
+  });
+  function finish() {
+    if (drawing && markup.current) { markup.strokes.push(markup.current); markup.current = null; }
+    drawing = false;
+    redrawMarkup();
+  }
+  canvas.addEventListener('pointerup', finish);
+  canvas.addEventListener('pointercancel', finish);
+}
+
+/* =========================== PDF generation =========================== */
+function fitBox(w, h, maxW, maxH) {
+  const ratio = Math.min(maxW / w, maxH / h);
+  return { w: w * ratio, h: h * ratio };
+}
+
+async function buildPdf() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+  const PAGE_W = 612, PAGE_H = 792, MARGIN = 42, CONTENT_W = PAGE_W - MARGIN * 2;
+  let y = MARGIN;
+
+  function footerStamp() { return new Date().toLocaleString(); }
+
+  function newPage() {
+    doc.addPage();
+    y = MARGIN;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(140);
+    doc.text(`${state.client.clientName || ''} — Tree Inspection Report`, MARGIN, 24);
+    doc.setDrawColor(200); doc.line(MARGIN, 30, PAGE_W - MARGIN, 30);
+    y = 46;
+  }
+  function ensure(h) { if (y + h > PAGE_H - MARGIN - 16) newPage(); }
+
+  function heading(text, size = 13) {
+    ensure(28);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(size); doc.setTextColor(23, 61, 43);
+    doc.text(text, MARGIN, y); y += 8;
+    doc.setDrawColor(31, 77, 54); doc.setLineWidth(1.2);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += 16;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(20, 20, 20);
+  }
+
+  function labelValue(label, value, labelW = 120) {
+    const lines = doc.splitTextToSize(value || '—', CONTENT_W - labelW);
+    ensure(lines.length * 12 + 4);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(60);
+    doc.text(label.toUpperCase(), MARGIN, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(20);
+    lines.forEach((ln, i) => doc.text(ln, MARGIN + labelW, y + i * 12));
+    y += lines.length * 12 + 6;
+  }
+
+  function paragraphBox(title, text, accent) {
+    if (!text) return;
+    const lines = doc.splitTextToSize(text, CONTENT_W - 24);
+    const boxH = lines.length * 12 + 34;
+    ensure(boxH);
+    doc.setFillColor(248, 250, 249);
+    doc.roundedRect(MARGIN, y, CONTENT_W, boxH, 6, 6, 'F');
+    doc.setDrawColor(accent[0], accent[1], accent[2]);
+    doc.setLineWidth(3);
+    doc.line(MARGIN + 2, y + 4, MARGIN + 2, y + boxH - 4);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(accent[0], accent[1], accent[2]);
+    doc.text(title, MARGIN + 14, y + 16);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(30);
+    lines.forEach((ln, i) => doc.text(ln, MARGIN + 14, y + 30 + i * 12));
+    y += boxH + 14;
+  }
+
+  function taskTable(tasks) {
+    const colTask = 140, colHours = 60, colDetails = CONTENT_W - colTask - colHours;
+    ensure(20);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(255);
+    doc.setFillColor(31, 77, 54);
+    doc.rect(MARGIN, y, CONTENT_W, 18, 'F');
+    doc.text('TASK', MARGIN + 6, y + 12);
+    doc.text('DETAILS', MARGIN + colTask + 6, y + 12);
+    doc.text('EST. HRS', MARGIN + colTask + colDetails + 6, y + 12);
+    y += 18;
+    let subtotal = 0;
+    tasks.forEach((task, i) => {
+      const typeLabel = task.type === 'Other' ? (task.customType || 'Other') : task.type;
+      const typeLines = doc.splitTextToSize(typeLabel, colTask - 10);
+      const detailLines = doc.splitTextToSize(task.details || '—', colDetails - 10);
+      const rowH = Math.max(typeLines.length, detailLines.length, 1) * 12 + 8;
+      ensure(rowH);
+      if (i % 2 === 0) { doc.setFillColor(238, 246, 241); doc.rect(MARGIN, y, CONTENT_W, rowH, 'F'); }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(20);
+      typeLines.forEach((ln, j) => doc.text(ln, MARGIN + 6, y + 12 + j * 12));
+      doc.setFont('helvetica', 'normal');
+      detailLines.forEach((ln, j) => doc.text(ln, MARGIN + colTask + 6, y + 12 + j * 12));
+      const hrs = parseFloat(task.hours) || 0;
+      subtotal += hrs;
+      doc.text(hrs ? hrs.toFixed(2) : '—', MARGIN + colTask + colDetails + 6, y + 12);
+      y += rowH;
+    });
+    y += 4;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(23, 61, 43);
+    doc.text(`Subtotal Est. Hours: ${subtotal.toFixed(2)}`, PAGE_W - MARGIN, y, { align: 'right' });
+    y += 16;
+    return subtotal;
+  }
+
+  function photosGrid(photos) {
+    if (!photos.length) return;
+    const gap = 14, boxW = (CONTENT_W - gap) / 2, boxH = 190;
+    for (let i = 0; i < photos.length; i += 2) {
+      ensure(boxH + 10);
+      const rowPhotos = [photos[i], photos[i + 1]].filter(Boolean);
+      rowPhotos.forEach((p, col) => {
+        const x = MARGIN + col * (boxW + gap);
+        const fit = fitBox(p.width, p.height, boxW, boxH - 16);
+        const ix = x + (boxW - fit.w) / 2;
+        const src = p.hasMarkup ? p.markupDataUrl : p.originalDataUrl;
+        try { doc.addImage(src, 'JPEG', ix, y, fit.w, fit.h); } catch (e) {}
+        doc.setFontSize(8); doc.setTextColor(100); doc.setFont('helvetica', 'normal');
+        doc.text(`Photo ${photos.indexOf(p) + 1}${p.hasMarkup ? ' (markup)' : ''}`, x + boxW / 2, y + boxH - 4, { align: 'center' });
+      });
+      y += boxH + 10;
+    }
+  }
+
+  // Cover / header
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(23, 61, 43);
+  doc.text('Tree Health & Landscape Inspection Report', MARGIN, y); y += 22;
+  if (state.client.companyName) {
+    doc.setFontSize(11); doc.setTextColor(60);
+    doc.text(state.client.companyName, MARGIN, y); y += 18;
+  }
+  doc.setDrawColor(31, 77, 54); doc.setLineWidth(1.5); doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += 16;
+
+  labelValue('Client', state.client.clientName);
+  labelValue('Property Address', state.client.propertyAddress);
+  labelValue('Contact', [state.client.contactName, state.client.contactPhone, state.client.contactEmail].filter(Boolean).join(' · '));
+  labelValue('Inspection Date', state.client.inspectionDate);
+  labelValue('Prepared By', [state.client.arboristName, state.client.credentials, state.client.certNumber ? ('Cert #' + state.client.certNumber) : ''].filter(Boolean).join(' — '));
+  y += 6;
+
+  heading('Tree & Landscape Inventory');
+  let grandTotal = 0;
+  state.trees.forEach((t, i) => {
+    ensure(24);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(31, 77, 54);
+    doc.text(`Tree ${i + 1}: ${t.species || 'Unspecified Species'}`, MARGIN, y); y += 16;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(20);
+    labelValue('Location', t.location, 100);
+    labelValue('DBH / Height', `${t.dbh || '—'} DBH, ${t.height || '—'} height`, 100);
+    photosGrid(t.photos);
+    if (t.tasks.length) grandTotal += taskTable(t.tasks);
+    y += 8;
+  });
+  if (!state.trees.length) {
+    doc.setFontSize(10); doc.setTextColor(100);
+    doc.text('No trees were recorded for this inspection.', MARGIN, y); y += 16;
+  }
+
+  ensure(24);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(23, 61, 43);
+  doc.text(`Grand Total Estimated Labor Hours: ${grandTotal.toFixed(2)}`, MARGIN, y);
+  y += 24;
+
+  const wp = state.workPlan;
+  heading('Work Plan & Logistics Summary');
+  labelValue('Crew Size', wp.crewSize);
+  labelValue('Equipment Needed', [...wp.equipment, wp.equipmentOther].filter(Boolean).join(', '));
+  labelValue('Traffic Control', wp.trafficControl);
+  labelValue('Neighbor Permission', (wp.neighborPermission === 'yes' ? 'Yes' : 'No') + (wp.neighborNotes ? ' — ' + wp.neighborNotes : ''));
+  labelValue('Required Permits', wp.permits);
+  labelValue('Safety Concerns', wp.safetyConcerns);
+  labelValue('Scheduling Preferences', wp.schedulingPrefs);
+  y += 8;
+
+  paragraphBox('CREW WORK ORDER — INTERNAL USE', wp.crewNotes, [155, 28, 28]);
+  paragraphBox('CLIENT-FACING PROPOSAL NOTES', wp.clientNotes, [31, 143, 87]);
+  paragraphBox('ADMINISTRATIVE / OFFICE NOTES', wp.adminNotes, [30, 90, 160]);
+
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(140);
+    doc.text(`Page ${i} of ${totalPages}`, PAGE_W / 2, PAGE_H - 20, { align: 'center' });
+    doc.text(footerStamp(), PAGE_W - MARGIN, PAGE_H - 20, { align: 'right' });
+  }
+
+  return doc;
+}
+
+function dataURLtoBlob(dataUrl) {
+  const [meta, b64] = dataUrl.split(',');
+  const mime = meta.match(/data:(.*);base64/)[1];
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  return url;
+}
+
+function reportFilename(ext) {
+  const slug = slugify(state.client.clientName || 'Client');
+  const date = state.client.inspectionDate || todayISO();
+  return `Inspection_Report_${slug}_${date}.${ext}`;
+}
+
+async function exportPdf() {
+  flashToast('Building PDF…');
+  const doc = await buildPdf();
+  const blob = doc.output('blob');
+  const name = reportFilename('pdf');
+  const url = downloadBlob(blob, name);
+  addExportLink(name, url);
+  flashToast('PDF ready ✓');
+}
+
+async function exportZip() {
+  flashToast('Building package…');
+  const doc = await buildPdf();
+  const pdfBlob = doc.output('blob');
+  const zip = new JSZip();
+  const clientSlug = slugify(state.client.clientName || 'Client');
+  const date = state.client.inspectionDate || todayISO();
+  zip.file(reportFilename('pdf'), pdfBlob);
+  state.trees.forEach((t, idx) => {
+    const treeNum = String(idx + 1).padStart(2, '0');
+    const speciesSlug = slugify(t.species || 'Tree');
+    t.photos.forEach((p, pi) => {
+      const suffix = t.photos.length > 1 ? `_${pi + 1}` : '';
+      zip.file(`Tree_${treeNum}_${speciesSlug}${suffix}.jpg`, dataURLtoBlob(p.originalDataUrl));
+      if (p.hasMarkup) zip.file(`Tree_${treeNum}_${speciesSlug}${suffix}_markup.jpg`, dataURLtoBlob(p.markupDataUrl));
+    });
+  });
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const name = `SingleOps_Package_${clientSlug}_${date}.zip`;
+  const url = downloadBlob(blob, name);
+  addExportLink(name, url);
+  flashToast('Package ready ✓');
+}
+
+function addExportLink(name, url) {
+  const box = document.getElementById('exportLinks');
+  if (!box) return;
+  const row = document.createElement('div');
+  row.innerHTML = `✓ <a href="${url}" target="_blank" rel="noopener" class="underline font-semibold">${esc(name)}</a> — tap to open/save if the download didn't prompt automatically.`;
+  box.appendChild(row);
+}
+
+/* =========================== Event wiring (delegation) =========================== */
+function handleBindEvent(e) {
+  const el = e.target.closest('[data-bind]');
+  if (!el) return;
+  setByPath(state, el.dataset.bind, el.value);
+  schedulePersist();
+  if (el.dataset.recalc) updateTotals();
+  if (el.tagName === 'SELECT') renderAll();
+}
+document.addEventListener('input', handleBindEvent);
+document.addEventListener('change', e => { if (e.target.tagName === 'SELECT') handleBindEvent(e); });
+
+document.addEventListener('click', async e => {
+  const el = e.target;
+
+  const gotoStep = el.closest('[data-goto-step]');
+  if (gotoStep) { goToStep(Number(gotoStep.dataset.gotoStep)); return; }
+
+  const gotoConfirm = el.closest('[data-goto-step-confirm]');
+  if (gotoConfirm) {
+    if (!state.trees.length) {
+      const ok = await confirmDialog('No trees added', 'Continue to the Work Plan without any trees in the inventory?');
+      if (!ok) return;
+    }
+    goToStep(Number(gotoConfirm.dataset.gotoStepConfirm));
+    return;
+  }
+
+  if (el.closest('[data-next-from-1]')) {
+    if (!state.client.clientName || !state.client.propertyAddress) {
+      flashToast('Enter client name and address to continue');
+      return;
+    }
+    goToStep(2); return;
+  }
+
+  if (el.closest('[data-add-tree]')) { addTree(); return; }
+
+  const toggle = el.closest('[data-toggle-tree]');
+  if (toggle) { toggleTree(toggle.dataset.toggleTree); return; }
+
+  const delTree = el.closest('[data-remove-tree]');
+  if (delTree) { removeTree(delTree.dataset.removeTree); return; }
+
+  const addT = el.closest('[data-add-task]');
+  if (addT) { addTask(addT.dataset.addTask); return; }
+
+  const remT = el.closest('[data-remove-task]');
+  if (remT) { const [treeId, taskId] = remT.dataset.removeTask.split(':'); removeTask(treeId, taskId); return; }
+
+  const remP = el.closest('[data-remove-photo]');
+  if (remP) { const [treeId, photoId] = remP.dataset.removePhoto.split(':'); removePhoto(treeId, photoId); return; }
+
+  const remarkP = el.closest('[data-remark-photo]');
+  if (remarkP) { const [treeId, photoId] = remarkP.dataset.remarkPhoto.split(':'); openMarkupModal(treeId, photoId); return; }
+
+  const takePhoto = el.closest('[data-take-photo]');
+  if (takePhoto) {
+    pendingTreeIdForPhoto = takePhoto.dataset.takePhoto;
+    document.getElementById('fileCamera').click();
+    return;
+  }
+  const choosePhoto = el.closest('[data-choose-photo]');
+  if (choosePhoto) {
+    pendingTreeIdForPhoto = choosePhoto.dataset.choosePhoto;
+    document.getElementById('fileLibrary').click();
+    return;
+  }
+
+  const toggleEquip = el.closest('[data-toggle-equipment]');
+  if (toggleEquip) {
+    const val = toggleEquip.dataset.toggleEquipment;
+    const arr = state.workPlan.equipment;
+    const i = arr.indexOf(val);
+    if (i === -1) arr.push(val); else arr.splice(i, 1);
+    schedulePersist(); renderAll();
+    return;
+  }
+
+  const setNeighbor = el.closest('[data-set-neighbor]');
+  if (setNeighbor) { state.workPlan.neighborPermission = setNeighbor.dataset.setNeighbor; schedulePersist(); renderAll(); return; }
+
+  const mTool = el.closest('[data-markup-tool]');
+  if (mTool) { markup.tool = mTool.dataset.markupTool; renderMarkupToolbar(); return; }
+  const mColor = el.closest('[data-markup-color]');
+  if (mColor) { markup.color = mColor.dataset.markupColor; renderMarkupToolbar(); return; }
+
+  if (el.id === 'markupUndo') { markup.strokes.pop(); redrawMarkup(); return; }
+  if (el.id === 'markupClear') {
+    const t = state.trees.find(x => x.id === markup.treeId);
+    const p = t.photos.find(x => x.id === markup.photoId);
+    markup.strokes = []; markup.current = null; markup.hadBaseMarkup = false;
+    const img = new Image();
+    img.onload = () => { markup.baseImage = img; redrawMarkup(); };
+    img.src = p.originalDataUrl;
+    return;
+  }
+  if (el.id === 'markupClose' || el.id === 'markupCancel') { document.getElementById('markupModal').classList.add('hidden'); return; }
+  if (el.id === 'markupSave') {
+    const canvas = document.getElementById('markupCanvas');
+    const t = state.trees.find(x => x.id === markup.treeId);
+    const p = t.photos.find(x => x.id === markup.photoId);
+    p.hasMarkup = markup.hadBaseMarkup || markup.strokes.length > 0;
+    p.markupDataUrl = p.hasMarkup ? canvas.toDataURL('image/jpeg', 0.88) : null;
+    document.getElementById('markupModal').classList.add('hidden');
+    schedulePersist(); renderAll();
+    return;
+  }
+
+  if (el.id === 'btnPdf') { el.disabled = true; try { await exportPdf(); } finally { el.disabled = false; } return; }
+  if (el.id === 'btnZip') { el.disabled = true; try { await exportZip(); } finally { el.disabled = false; } return; }
+
+  if (el.id === 'btnNewInspection') {
+    const ok = await confirmDialog('Start a new inspection?', 'This clears all client, tree, and work-plan data on this device. Make sure you already saved your PDF/ZIP export.');
+    if (!ok) return;
+    state = defaultState();
+    await dbDelete('current').catch(() => {});
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    goToStep(1);
+    return;
+  }
+});
+
+document.getElementById('markupWidth').addEventListener('input', e => { markup.width = Number(e.target.value); });
+
+document.addEventListener('change', e => {
+  if (e.target.id === 'fileCamera' || e.target.id === 'fileLibrary') {
+    const file = e.target.files[0];
+    const treeId = pendingTreeIdForPhoto;
+    e.target.value = '';
+    if (file && treeId) handlePhotoFile(treeId, file);
+  }
+});
+
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const isDark = document.documentElement.classList.toggle('dark');
+  try { localStorage.setItem('arborist_theme', isDark ? 'dark' : 'light'); } catch (e) {}
+});
+
+/* =========================== Init =========================== */
+function applySpeciesList() {
+  document.getElementById('speciesList').innerHTML = SPECIES_OPTIONS.map(s => `<option value="${esc(s)}">`).join('');
+}
+
+async function init() {
+  applySpeciesList();
+
+  const savedTheme = (() => { try { return localStorage.getItem('arborist_theme'); } catch (e) { return null; } })();
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (savedTheme === 'dark' || (!savedTheme && prefersDark)) document.documentElement.classList.add('dark');
+
+  try {
+    const rec = await dbGet('current');
+    if (rec && rec.state) state = Object.assign(defaultState(), rec.state);
+  } catch (e) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) state = Object.assign(defaultState(), JSON.parse(raw));
+    } catch (e2) {}
+  }
+
+  wireMarkupCanvas();
+  renderAll();
+
+  const statusEl = document.getElementById('statusLine');
+  statusEl.textContent = navigator.onLine ? 'Online — caching for offline use…' : 'Offline';
+  window.addEventListener('online', () => statusEl.textContent = 'Online');
+  window.addEventListener('offline', () => statusEl.textContent = 'Offline — still fully usable');
+
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    try {
+      const reg = await navigator.serviceWorker.register('./sw.js');
+      await navigator.serviceWorker.ready;
+      statusEl.textContent = '🟢 Offline Ready';
+    } catch (e) {
+      statusEl.textContent = 'Running (offline caching unavailable)';
+    }
+  } else {
+    statusEl.textContent = 'Running (open via a server for offline caching)';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
