@@ -138,7 +138,7 @@ const COLORS = ['#FF3B30','#FFCC00','#FFFFFF','#111111','#1A73E8','#34C759'];
 /* ===================== State ===================== */
 let uidCounter = 1;
 function uid(){ return uidCounter++; }
-function newTask(){ return { id: uid(), type: WORK_TASK_TYPES[0], customType:'', details:'', hours:'', price:'', splitJob:false, splitVisit:false, photo:null }; }
+function newTask(){ return { id: uid(), type: WORK_TASK_TYPES[0], customType:'', details:'', hours:'', price:'', splitJob:false, photo:null }; }
 function newTree(){ return { id: uid(), mainPhoto:null, gps:{lat:'',lng:'',accuracy:''}, species:'', dbh:'', location:'', price:'', tasks:[newTask()], open:true }; }
 function newState(){
   return {
@@ -212,7 +212,12 @@ function normalizeState(s){
   out.trees = (Array.isArray(s.trees) && s.trees.length ? s.trees : [newTree()]).map(t=>{
     const tree = Object.assign(newTree(), t);
     tree.gps = Object.assign({lat:'',lng:'',accuracy:''}, t.gps);
-    tree.tasks = (Array.isArray(t.tasks) ? t.tasks : []).map(tk=>Object.assign(newTask(), tk));
+    tree.tasks = (Array.isArray(t.tasks) ? t.tasks : []).map(tk=>{
+      const task = Object.assign(newTask(), tk);
+      if(task.splitVisit) task.splitJob = true;
+      delete task.splitVisit;
+      return task;
+    });
     return tree;
   });
   out.step = Math.min(Math.max(0, Number(out.step)||0), 3);
@@ -544,7 +549,6 @@ function renderTaskCard(tree, ti, task, tj){
     </div>
     <div class="flex gap-4 text-xs">
       <label class="flex items-center gap-1.5"><input type="checkbox" data-bind="trees.${ti}.tasks.${tj}.splitJob" ${task.splitJob?'checked':''}> Split Job</label>
-      <label class="flex items-center gap-1.5"><input type="checkbox" data-bind="trees.${ti}.tasks.${tj}.splitVisit" ${task.splitVisit?'checked':''}> Split Visit</label>
     </div>
     ${photoSlotHtml(task.photo, ti, tj, 'task')}
   </div>`;
@@ -1194,8 +1198,8 @@ async function buildMainPdfDoc(){
     if(tree.mainPhoto && (tree.mainPhoto.editedDataUrl||tree.mainPhoto.originalDataUrl)){ indentCur=10; addPhoto(tree.mainPhoto.editedDataUrl||tree.mainPhoto.originalDataUrl, label, 200); }
     tree.tasks.forEach((task,tj)=>{
       const tlabel = label+String.fromCharCode(97+tj);
-      const tag = task.splitJob||task.splitVisit ? `  [${[task.splitJob&&'SPLIT JOB', task.splitVisit&&'SPLIT VISIT'].filter(Boolean).join(' / ')}]` : '';
-      p(`• ${taskTypeLabel(task)}${tag}`, 9.5, !!(task.splitJob||task.splitVisit), 10);
+      const tag = task.splitJob ? '  [SPLIT JOB]' : '';
+      p(`• ${taskTypeLabel(task)}${tag}`, 9.5, !!task.splitJob, 10);
       if(task.details) p(task.details, 9, false, 16);
       if(Number(task.price)){ running += Number(task.price); p(`Task Price: ${money(task.price)}   Running Total: ${money(running)}`, 9, true, 16); }
       if(task.photo && (task.photo.editedDataUrl||task.photo.originalDataUrl)){ indentCur=16; addPhoto(task.photo.editedDataUrl||task.photo.originalDataUrl, tlabel, 160); }
@@ -1227,7 +1231,7 @@ async function buildMainPdfDoc(){
     p(`Tree ${label}: ${tree.species||'Unspecified'} - ${tree.location||'-'}`, 10.5, true);
     tree.tasks.forEach((task,tj)=>{
       const tlabel = label+String.fromCharCode(97+tj);
-      const tag = task.splitJob||task.splitVisit ? `  [${[task.splitJob&&'SPLIT JOB', task.splitVisit&&'SPLIT VISIT'].filter(Boolean).join(' / ')}]` : '';
+      const tag = task.splitJob ? '  [SPLIT JOB]' : '';
       p(`• (${tlabel}) ${taskTypeLabel(task)} — Est. ${task.hours||'-'} hrs${tag}`, 9.5, false, 10);
     });
   });
@@ -1304,10 +1308,9 @@ function buildNotecardDoc(){
   let any=false;
   state.trees.forEach((tree,ti)=>{
     tree.tasks.forEach(task=>{
-      if(task.splitJob||task.splitVisit){
+      if(task.splitJob){
         any=true;
-        const tag = task.splitVisit?'SPLIT VISIT':'SPLIT JOB';
-        line(`• T${ti+1}: ${taskTypeLabel(task)} [${tag}] ${task.hours||'-'}h ${money(task.price)}`, 8);
+        line(`• T${ti+1}: ${taskTypeLabel(task)} [SPLIT JOB] ${task.hours||'-'}h ${money(task.price)}`, 8);
       }
     });
   });
