@@ -15,7 +15,7 @@
  * Bump CACHE_VERSION whenever any shipped file changes, so returning users
  * pick up the update on next launch instead of running stale cached code.
  */
-const CACHE_VERSION = 'rtec-gtw-builder-v3';
+const CACHE_VERSION = 'rtec-gtw-builder-v4';
 
 const SAME_ORIGIN_URLS = [
   './',

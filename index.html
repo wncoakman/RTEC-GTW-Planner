@@ -53,6 +53,9 @@
 
 <main class="max-w-3xl mx-auto px-4 py-4 pb-28" id="appRoot"></main>
 <datalist id="speciesList"></datalist>
+<!-- Single shared photo input, kept outside #appRoot so re-renders never replace it while the
+     camera/picker is open. No capture attribute: the OS offers Take Photo / Photo Library. -->
+<input type="file" accept="image/*" id="photoFileInput" class="hidden">
 
 <div id="toastHost" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none"></div>
 
@@ -344,14 +347,8 @@ function photoSlotHtml(photo, treeIdx, taskIdx, role){
   <div class="space-y-1.5">
     ${hasPhoto ? `<img src="${src}" class="photo-thumb">` : `<div class="photo-thumb flex items-center justify-center text-slate-400 text-xs border border-dashed border-slate-300">No photo</div>`}
     <div class="flex gap-2">
-      <label class="flex-1 text-center text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-lg py-2 cursor-pointer">
-        📷 ${hasPhoto ? 'Retake' : 'Take Photo'}
-        <input type="file" accept="image/*" capture="environment" class="hidden" data-photo-input data-tree-idx="${treeIdx}" ${taskIdx!=null?`data-task-idx="${taskIdx}"`:''} data-role="${role}">
-      </label>
-      <label class="flex-1 text-center text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-lg py-2 cursor-pointer">
-        🖼 ${hasPhoto ? 'Replace' : 'Upload'}
-        <input type="file" accept="image/*" class="hidden" data-photo-input data-tree-idx="${treeIdx}" ${taskIdx!=null?`data-task-idx="${taskIdx}"`:''} data-role="${role}">
-      </label>
+      <button class="flex-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-lg py-2"
+        data-photo-pick data-tree-idx="${treeIdx}" ${taskIdx!=null?`data-task-idx="${taskIdx}"`:''} data-role="${role}">📷 ${hasPhoto ? 'Replace Photo' : 'Add Photo'}</button>
       <button class="flex-1 text-xs font-medium bg-brand-light text-brand-dark rounded-lg py-2 disabled:opacity-40" ${hasPhoto?'':'disabled'}
         data-photo-edit data-tree-idx="${treeIdx}" ${taskIdx!=null?`data-task-idx="${taskIdx}"`:''} data-role="${role}">Edit / Annotate</button>
     </div>
@@ -607,6 +604,14 @@ appRoot.addEventListener('click', async e=>{
     return;
   }
 
+  const photoPick = e.target.closest('[data-photo-pick]');
+  if(photoPick){
+    pendingPhotoTarget = { treeIdx: Number(photoPick.dataset.treeIdx), taskIdx: photoPick.dataset.taskIdx!=null ? Number(photoPick.dataset.taskIdx) : null, role: photoPick.dataset.role };
+    photoFileInput.value = '';
+    photoFileInput.click();
+    return;
+  }
+
   const photoEdit = e.target.closest('[data-photo-edit]');
   if(photoEdit){ openEditorFromEl(photoEdit); return; }
 
@@ -619,20 +624,25 @@ appRoot.addEventListener('click', async e=>{
   if(e.target.id==='genCardBtn'){ downloadNotecardOnly(); return; }
 });
 
+const photoFileInput = document.getElementById('photoFileInput');
+let pendingPhotoTarget = null;
+photoFileInput.addEventListener('change', async ()=>{
+  const target = pendingPhotoTarget; pendingPhotoTarget = null;
+  const file = photoFileInput.files && photoFileInput.files[0];
+  photoFileInput.value = '';
+  if(!target || !file) return;
+  let dataUrl;
+  try{ dataUrl = await fileToJpegDataUrl(file); }
+  catch(err){ toast(err.message); return; }
+  const tree = state.trees[target.treeIdx];
+  if(!tree) return;
+  const photoObj = { originalDataUrl: dataUrl, editedDataUrl: null, shapes: [] };
+  if(target.role==='main') tree.mainPhoto = photoObj;
+  else if(tree.tasks[target.taskIdx]) tree.tasks[target.taskIdx].photo = photoObj;
+  renderStepTrees(); persist();
+});
+
 appRoot.addEventListener('change', async e=>{
-  const fileInput = e.target.closest('[data-photo-input]');
-  if(fileInput && fileInput.files && fileInput.files[0]){
-    let dataUrl;
-    try{ dataUrl = await fileToJpegDataUrl(fileInput.files[0]); }
-    catch(err){ toast(err.message); fileInput.value=''; return; }
-    const ti = Number(fileInput.dataset.treeIdx);
-    const role = fileInput.dataset.role;
-    const photoObj = { originalDataUrl: dataUrl, editedDataUrl: null, shapes: [] };
-    if(role==='main'){ state.trees[ti].mainPhoto = photoObj; }
-    else { const tj = Number(fileInput.dataset.taskIdx); state.trees[ti].tasks[tj].photo = photoObj; }
-    renderStepTrees(); persist();
-    return;
-  }
   const customLabel = e.target.closest('[data-custom-access-label]');
   if(customLabel){ state.accessPermits.custom[Number(customLabel.dataset.customAccessLabel)].label = customLabel.value; persist(); return; }
   const customCheck = e.target.closest('[data-custom-access-check]');
