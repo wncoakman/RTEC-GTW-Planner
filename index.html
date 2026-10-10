@@ -150,6 +150,7 @@ function newState(){
       stumpGrinder:'None', miniLoader:'None',
       spyderLift:{ needed:false, price:'' }
     },
+    workPlan: '',
     safety: '',
     accessPermits: { standard:{ neighborPermission:false,dominion:false,pepco:false,parkingPermits:false,missUtility:false,ddotRemoval:false }, custom:[] },
     notes: { crew:'', client:'', internal:'', scheduling:'' }
@@ -598,6 +599,12 @@ function renderStepLogistics(){
       </div>
       <label class="block text-sm pt-1"><span class="block text-xs font-medium text-slate-500 mb-1">Crew Details</span>
         <input data-bind="client.crewSize" value="${esc(state.client.crewSize)}" type="text" placeholder="e.g. 4 - 2 climbers, 2 ground; CDL driver" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+      <h2 class="text-sm font-bold text-slate-700">Work plan and mobilization logistics</h2>
+      <p class="text-xs text-slate-500">Describe the order of work and how the crew sets up: where trucks, chipper and crane park or stage; access route and gate/driveway width; drop and landing zones; debris and wood handling; ground protection; anything to move or protect first.</p>
+      <textarea data-bind="workPlan" rows="5" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. Bucket on street in front of #12. Chipper in driveway. Remove Tree 2 first to open the drop zone for Tree 1. Plywood over lawn to the backyard gate.">${esc(state.workPlan)}</textarea>
     </div>
 
     <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
@@ -1466,6 +1473,10 @@ async function buildMainPdfDoc(){
   p('Crew Details: '+(state.client.crewSize||'-'));
   y+=6;
 
+  h2('Work Plan & Mobilization Logistics');
+  p(state.workPlan || 'None noted.');
+  y+=6;
+
   h2('Safety Concerns');
   p(state.safety || 'None noted.');
   y+=6;
@@ -1533,6 +1544,10 @@ function buildNotecardDoc(){
   y += 0.04;
 
   line('Crew Details: '+(state.client.crewSize||'-'), 9);
+  y += 0.04;
+
+  line('Work Plan / Mobilization:', 10, true);
+  line(state.workPlan||'-', 8);
   y += 0.04;
 
   line('Access & Permits:', 10, true);
