@@ -1587,6 +1587,12 @@ function buildCSV(){
   return [header.join(','), ...rows.map(r=>r.join(','))].join('\n');
 }
 
+function localISODate(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function safeFilePart(s){ return String(s||'').trim().replace(/[^A-Za-z0-9.-]+/g,'_').replace(/^_+|_+$/g,''); }
+/* ZIP bundle (and its top-level folder): [ClientName]_[Date]_GTW_export */
+function zipExportName(){
+  return `${safeFilePart(state.client.name)||'Client'}_${safeFilePart(state.client.date)||localISODate()}_GTW_export`;
+}
 function jobFileBase(){
   return `RTEC_GTW_${(state.client.city||'Job').replace(/[^a-z0-9]+/gi,'_')}_${state.client.date||''}`.replace(/_+$/,'');
 }
@@ -1614,14 +1620,16 @@ function downloadNotecardOnly(){
 }
 async function generateAndDownloadZip(btn){
   await withBusy(btn, 'Building ZIP…', async ()=>{
+    const exportName = zipExportName();
     const zip = new JSZip();
+    const root = zip.folder(exportName);
     const mainDoc = await buildMainPdfDoc();
-    zip.file(jobFileBase()+'_Report.pdf', mainDoc.output('blob'));
+    root.file(jobFileBase()+'_Report.pdf', mainDoc.output('blob'));
     const cardDoc = buildNotecardDoc();
-    zip.file(jobFileBase()+'_Notecard.pdf', cardDoc.output('blob'));
-    zip.file('tree_coordinates.geojson', JSON.stringify(buildGeoJSON(), null, 2));
-    zip.file('tree_coordinates.csv', buildCSV());
-    const media = zip.folder('media');
+    root.file(jobFileBase()+'_Notecard.pdf', cardDoc.output('blob'));
+    root.file('tree_coordinates.geojson', JSON.stringify(buildGeoJSON(), null, 2));
+    root.file('tree_coordinates.csv', buildCSV());
+    const media = root.folder('media');
     state.trees.forEach((tree,ti)=>{
       const label = String(ti+1);
       if(tree.mainPhoto){
@@ -1637,7 +1645,7 @@ async function generateAndDownloadZip(btn){
       });
     });
     const blob = await zip.generateAsync({ type:'blob' });
-    downloadBlob(blob, jobFileBase()+'.zip');
+    downloadBlob(blob, exportName+'.zip');
     toast('ZIP bundle downloaded.');
   });
 }
