@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Arborist Field Inspection</title>
+<title>RTEC GTW Job Builder</title>
 
-<meta name="theme-color" content="#1f4d36">
+<meta name="theme-color" content="#1A73E8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="TreeInspect">
+<meta name="apple-mobile-web-app-title" content="GTW Builder">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
@@ -22,9 +22,9 @@
       extend: {
         colors: {
           brand: {
-            50: '#eafbf0', 100: '#d2f3e0', 200: '#a6e7c1', 300: '#71d69d',
-            400: '#3fbd79', 500: '#1f8f57', 600: '#1f4d36', 700: '#173d2b',
-            800: '#122f22', 900: '#0f2e1e'
+            50: '#EAF1FB', 100: '#D2E3FC', 200: '#AECBFA', 300: '#8AB4F8',
+            400: '#669DF6', 500: '#4285F4', 600: '#1A73E8', 700: '#15294A',
+            800: '#122A46', 900: '#0B1220'
           }
         }
       }
@@ -36,75 +36,78 @@
 
 <style>
   html, body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; }
-  body { background: #f3f6f4; color: #0f2e1e; padding-bottom: env(safe-area-inset-bottom); }
-  html.dark body { background: #0f2e1e; color: #eafbf0; }
+  body { background: #F3F6FB; color: #0B1220; padding-bottom: env(safe-area-inset-bottom); }
+  html.dark body { background: #0B1220; color: #EAF1FB; }
   .safe-top { padding-top: env(safe-area-inset-top); }
   .tap { min-height: 52px; }
   input, select, textarea {
     font-size: 16px; /* prevents iOS auto-zoom on focus */
   }
-  input[type="range"] { -webkit-appearance: none; height: 6px; border-radius: 4px; background: #a6e7c1; }
+  input[type="range"] { -webkit-appearance: none; height: 6px; border-radius: 4px; background: #AECBFA; }
   input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%;
-    background: #1f4d36; border: 3px solid white; box-shadow: 0 1px 3px rgba(0,0,0,.4);
+    background: #1A73E8; border: 3px solid white; box-shadow: 0 1px 3px rgba(0,0,0,.4);
   }
-  html.dark input[type="range"] { background: #173d2b; }
-  html.dark input[type="range"]::-webkit-slider-thumb { background: #3fbd79; border-color: #0f2e1e; }
-  #markupCanvas { touch-action: none; background: #000; }
+  html.dark input[type="range"] { background: #15294A; }
+  html.dark input[type="range"]::-webkit-slider-thumb { background: #669DF6; border-color: #0B1220; }
+  #markupCanvas { touch-action: none; background: #000; display: block; }
+  #markupViewport { touch-action: none; }
   .field-label { font-weight: 600; font-size: 0.8rem; letter-spacing: .02em; text-transform: uppercase; opacity: .7; }
   .field-input {
-    width: 100%; border-radius: 0.75rem; border: 2px solid #c7e3d3; background: white;
-    padding: 0.85rem 1rem; color: #0f2e1e;
+    width: 100%; border-radius: 0.75rem; border: 2px solid #CFE0FB; background: white;
+    padding: 0.85rem 1rem; color: #0B1220;
   }
-  html.dark .field-input { background: #173d2b; border-color: #2a5c41; color: #eafbf0; }
-  .field-input:focus { outline: none; border-color: #1f8f57; box-shadow: 0 0 0 3px rgba(31,143,87,.25); }
+  html.dark .field-input { background: #15294A; border-color: #28406B; color: #EAF1FB; }
+  .field-input:focus { outline: none; border-color: #1A73E8; box-shadow: 0 0 0 3px rgba(26,115,232,.25); }
   .btn-primary {
-    background: #1f4d36; color: white; font-weight: 700; border-radius: 1rem;
-    padding: 1rem 1.25rem; box-shadow: 0 2px 8px rgba(15,46,30,.25);
+    background: #1A73E8; color: white; font-weight: 700; border-radius: 1rem;
+    padding: 1rem 1.25rem; box-shadow: 0 2px 8px rgba(11,18,32,.25);
   }
   .btn-primary:active { transform: scale(0.98); }
   .btn-primary:disabled { opacity: .45; }
   .btn-secondary {
-    background: transparent; color: #1f4d36; font-weight: 700; border-radius: 1rem;
-    padding: 1rem 1.25rem; border: 2px solid #1f4d36;
+    background: transparent; color: #1A73E8; font-weight: 700; border-radius: 1rem;
+    padding: 1rem 1.25rem; border: 2px solid #1A73E8;
   }
-  html.dark .btn-secondary { color: #a6e7c1; border-color: #a6e7c1; }
+  html.dark .btn-secondary { color: #8AB4F8; border-color: #8AB4F8; }
   .btn-danger { background: #fdecec; color: #9b1c1c; font-weight: 700; border-radius: 0.75rem; padding: .6rem .9rem; }
   html.dark .btn-danger { background: #3a1616; color: #ff9b9b; }
-  .card { background: white; border-radius: 1.1rem; box-shadow: 0 1px 6px rgba(15,46,30,.12); }
-  html.dark .card { background: #122f22; box-shadow: none; border: 1px solid #1f4d36; }
+  .card { background: white; border-radius: 1.1rem; box-shadow: 0 1px 6px rgba(11,18,32,.12); }
+  html.dark .card { background: #122A46; box-shadow: none; border: 1px solid #1A73E8; }
   .chip {
     display: inline-flex; align-items: center; gap: .4rem; padding: .55rem .9rem; border-radius: 999px;
-    border: 2px solid #c7e3d3; font-weight: 600; font-size: .85rem; cursor: pointer; user-select: none;
+    border: 2px solid #CFE0FB; font-weight: 600; font-size: .85rem; cursor: pointer; user-select: none;
   }
-  .chip.active { background: #1f4d36; color: white; border-color: #1f4d36; }
-  html.dark .chip { border-color: #2a5c41; }
-  html.dark .chip.active { background: #3fbd79; color: #0f2e1e; border-color: #3fbd79; }
+  .chip.active { background: #1A73E8; color: white; border-color: #1A73E8; }
+  html.dark .chip { border-color: #28406B; }
+  html.dark .chip.active { background: #669DF6; color: #0B1220; border-color: #669DF6; }
+  .split-box { background: #FFF7E6; border: 2px dashed #D97706; border-radius: .75rem; padding: .75rem; }
+  html.dark .split-box { background: #2a2010; border-color: #D97706; }
   .hidden { display: none !important; }
   .toast {
     position: fixed; bottom: calc(1rem + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
-    background: #0f2e1e; color: #eafbf0; padding: .7rem 1.1rem; border-radius: .8rem; font-size: .9rem;
+    background: #0B1220; color: #EAF1FB; padding: .7rem 1.1rem; border-radius: .8rem; font-size: .9rem;
     z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,.35); opacity: 0; transition: opacity .25s; pointer-events: none;
   }
   .toast.show { opacity: 1; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-thumb { background: #a6e7c1; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: #AECBFA; border-radius: 3px; }
 </style>
 </head>
 <body class="min-h-screen">
 
-<header class="safe-top sticky top-0 z-30 bg-brand-700 text-white shadow-md">
+<header class="safe-top sticky top-0 z-30 bg-brand-600 text-white shadow-md">
   <div class="flex items-center justify-between px-4 py-3">
-    <div class="flex items-center gap-2">
-      <div class="text-2xl">🌳</div>
-      <div>
-        <div class="font-bold leading-tight">TreeInspect</div>
-        <div id="statusLine" class="text-[11px] text-brand-200 leading-tight">Starting…</div>
+    <div class="flex items-center gap-2 min-w-0">
+      <div class="text-2xl">🌲</div>
+      <div class="min-w-0">
+        <div class="font-bold leading-tight text-sm sm:text-base truncate">RTEC GTW Job Builder</div>
+        <div id="statusLine" class="text-[11px] text-brand-100 leading-tight">Starting…</div>
       </div>
     </div>
-    <button id="themeToggle" class="tap px-3 rounded-xl bg-brand-600 active:bg-brand-500 text-lg">🌓</button>
+    <button id="themeToggle" class="tap px-3 rounded-xl bg-brand-700 active:bg-brand-800 text-lg">🌓</button>
   </div>
-  <nav id="stepNav" class="grid grid-cols-4 text-center text-xs font-semibold border-t border-brand-600"></nav>
+  <nav id="stepNav" class="grid grid-cols-4 text-center text-xs font-semibold border-t border-brand-700"></nav>
 </header>
 
 <main id="app" class="max-w-2xl mx-auto px-4 py-5 pb-28"></main>
@@ -129,17 +132,21 @@
     <div class="font-bold">Mark Up Photo</div>
     <button id="markupClose" class="tap px-3 text-2xl leading-none">✕</button>
   </div>
-  <div class="flex-1 flex items-center justify-center overflow-hidden p-2">
-    <canvas id="markupCanvas" class="max-w-full max-h-full rounded-lg"></canvas>
+  <div id="markupViewport" class="flex-1 flex items-center justify-center overflow-hidden p-2">
+    <div id="markupZoomWrap" style="transform-origin:0 0;">
+      <canvas id="markupCanvas" class="max-w-full max-h-full rounded-lg"></canvas>
+    </div>
   </div>
   <div class="px-3 pb-2">
-    <div class="flex gap-2 justify-center mb-2" id="markupTools"></div>
+    <div class="flex gap-2 justify-center mb-2 flex-wrap" id="markupTools"></div>
     <div class="flex gap-2 justify-center mb-2" id="markupColors"></div>
     <div class="flex items-center gap-3 px-2 mb-3 text-white text-xs">
       <span>Thin</span>
       <input id="markupWidth" type="range" min="2" max="18" value="6" class="flex-1">
       <span>Thick</span>
+      <button id="markupResetZoom" class="btn-secondary text-white border-white text-xs px-2 py-1 rounded-lg shrink-0">🔍 Reset Zoom</button>
     </div>
+    <div class="text-center text-white text-[11px] opacity-70 mb-2">Pinch with two fingers to zoom in for precision work</div>
   </div>
   <div class="grid grid-cols-4 gap-2 px-3 pb-3" style="padding-bottom: calc(.75rem + env(safe-area-inset-bottom));">
     <button id="markupUndo" class="btn-secondary tap text-white border-white col-span-1 text-sm">↩ Undo</button>
@@ -175,10 +182,17 @@ const TASK_TYPES = [
   'Risk Mitigation – Target Reduction','Other'
 ];
 
-const EQUIPMENT_OPTIONS = [
-  'Bucket Truck','Chipper','Crane','Stump Grinder','Climbing Gear','Chainsaws (ground)',
-  'Aerial Lift','Mini Skid Steer / Mulcher','Dump Truck & Trailer'
+const EQUIPMENT_FIELDS = [
+  { key: 'bucketTruck', label: "Bucket Truck", options: ['Not Needed', "60'", "75'"] },
+  { key: 'chipTruck', label: 'Chip Truck', options: ['Not Needed', 'Small', 'Standard'] },
+  { key: 'extraChipTruck', label: 'Extra Chip Truck', options: ['Not Needed', 'Small', 'Standard'] },
+  { key: 'crane', label: 'Crane', options: ['Not Needed', 'Needed'], priceKey: 'cranePrice' },
+  { key: 'stumpGrinder', label: 'Stump Grinder', options: ['Not Needed', 'Rayco', 'Timber'] },
+  { key: 'miniLoader', label: 'Mini Loader', options: ['Not Needed', 'ML1', 'ML2'] },
+  { key: 'spyderLift', label: 'Spyder Lift', options: ['Not Needed', 'Needed'], priceKey: 'spyderLiftPrice' }
 ];
+
+const PERMITS_CHECKLIST = ["Neighbor's Written Permission", 'Dominion', 'Pepco', 'Parking Permits', 'Miss Utility', 'DDOT Removal Permit'];
 
 /* =========================== Persistence (IndexedDB) =========================== */
 let dbPromise = null;
@@ -228,19 +242,28 @@ function schedulePersist() {
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
+function defaultGps() { return { lat: '', lng: '', accuracy: null, capturedAt: null }; }
+function defaultEquipment() {
+  const eq = { equipmentOther: '' };
+  EQUIPMENT_FIELDS.forEach(f => {
+    eq[f.key] = 'Not Needed';
+    if (f.priceKey) eq[f.priceKey] = '';
+  });
+  return eq;
+}
+
 function defaultState() {
   return {
     step: 1,
     client: {
-      companyName: '', clientName: '', propertyAddress: '', contactName: '',
-      contactPhone: '', contactEmail: '', inspectionDate: todayISO(),
-      arboristName: '', credentials: 'ISA Board Certified Master Arborist', certNumber: ''
+      singleOpsLead: '', clientName: '', propertyAddress: '', contactName: '',
+      contactPhone: '', contactEmail: '', inspectionDate: todayISO(), arboristName: ''
     },
     trees: [],
     workPlan: {
-      crewSize: '', equipment: [], equipmentOther: '', trafficControl: '',
-      neighborPermission: 'no', neighborNotes: '', permits: '', safetyConcerns: '',
-      crewNotes: '', clientNotes: '', adminNotes: '', schedulingPrefs: ''
+      crewSize: '', equipment: defaultEquipment(), trafficControl: '',
+      permitsChecklist: [], permitsCustom: '', safetyConcerns: '',
+      crewNotes: '', clientNotes: '', internalNotes: '', schedulingConcerns: ''
     }
   };
 }
@@ -297,6 +320,13 @@ function slugify(s) {
 function esc(s) {
   return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+function money(v) {
+  const n = parseFloat(v) || 0;
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function photoLabel(treeIdx, taskIdx) {
+  return taskIdx == null ? String(treeIdx + 1) : `${treeIdx + 1}${String.fromCharCode(97 + taskIdx)}`;
+}
 
 /* =========================== Step nav / routing =========================== */
 const STEP_LABELS = ['Client & Site', 'Trees', 'Work Plan', 'Review & Export'];
@@ -306,7 +336,7 @@ function renderStepNav() {
   nav.innerHTML = STEP_LABELS.map((label, i) => {
     const n = i + 1;
     const active = state.step === n;
-    return `<button data-goto-step="${n}" class="tap py-2 ${active ? 'bg-brand-800 text-white' : 'text-brand-200'}">${n}. ${label}</button>`;
+    return `<button data-goto-step="${n}" class="tap py-2 ${active ? 'bg-brand-800 text-white' : 'text-brand-100'}">${n}. ${label}</button>`;
   }).join('');
 }
 
@@ -335,7 +365,6 @@ function renderAll() {
 
 /* =========================== Step 1: Client & Site =========================== */
 function renderStep1() {
-  const c = state.client;
   const field = (label, path, placeholder = '', type = 'text') => `
     <div>
       <label class="field-label">${label}</label>
@@ -344,25 +373,17 @@ function renderStep1() {
   return `
     <div class="space-y-4">
       <div class="card p-4">
-        <h2 class="font-bold text-lg mb-3">Client &amp; Site Information</h2>
         <div class="grid grid-cols-1 gap-3">
-          ${field('Company / Firm Name (optional)', 'companyName', 'e.g. RTEC Treecare')}
+          ${field('SingleOps Lead #', 'singleOpsLead', 'e.g. 10234')}
           ${field('Client Name', 'clientName', 'Jane Smith')}
-          ${field('Property Address', 'propertyAddress', '123 Maple St, Springfield')}
+          ${field('Job Site Address', 'propertyAddress', '123 Maple St, Washington DC')}
           ${field('Contact Name', 'contactName', 'If different from client')}
           <div class="grid grid-cols-2 gap-3">
             ${field('Contact Phone', 'contactPhone', '(555) 555-5555', 'tel')}
             ${field('Contact Email', 'contactEmail', 'name@email.com', 'email')}
           </div>
           ${field('Inspection Date', 'inspectionDate', '', 'date')}
-        </div>
-      </div>
-      <div class="card p-4">
-        <h2 class="font-bold text-lg mb-3">Arborist</h2>
-        <div class="grid grid-cols-1 gap-3">
           ${field('Arborist Name', 'arboristName', 'Your name')}
-          ${field('Credentials', 'credentials', 'ISA Board Certified Master Arborist')}
-          ${field('ISA Certification Number (optional)', 'certNumber', 'e.g. MA-1234A')}
         </div>
       </div>
       <button class="btn-primary w-full tap" data-next-from-1>Next: Tree Inventory →</button>
@@ -373,9 +394,8 @@ function renderStep1() {
 function addTree() {
   state.trees.forEach(t => t.expanded = false);
   state.trees.push({
-    id: uid(), species: '', dbh: '', height: '', location: '',
-    gps: { lat: '', lng: '', accuracy: null, capturedAt: null },
-    photos: [], tasks: [], expanded: true
+    id: uid(), species: '', dbh: '', location: '', price: '',
+    gps: defaultGps(), mainPhoto: null, tasks: [], expanded: true
   });
   schedulePersist();
   renderAll();
@@ -401,7 +421,7 @@ async function removeTree(id) {
 
 function addTask(treeId) {
   const t = state.trees.find(x => x.id === treeId);
-  t.tasks.push({ id: uid(), type: TASK_TYPES[0], customType: '', details: '', hours: '' });
+  t.tasks.push({ id: uid(), type: TASK_TYPES[0], customType: '', details: '', hours: '', price: '', isSplit: false, splitHours: '', splitPrice: '', photo: null });
   schedulePersist();
   renderAll();
 }
@@ -411,6 +431,14 @@ function removeTask(treeId, taskId) {
   schedulePersist();
   renderAll();
 }
+function toggleSplit(treeId, taskId) {
+  const t = state.trees.find(x => x.id === treeId);
+  const task = t.tasks.find(x => x.id === taskId);
+  task.isSplit = !task.isSplit;
+  schedulePersist();
+  renderAll();
+}
+
 function captureGps(treeId) {
   const t = state.trees.find(x => x.id === treeId);
   if (!navigator.geolocation) { flashToast('Geolocation not supported on this device'); return; }
@@ -435,53 +463,109 @@ function captureGps(treeId) {
   );
 }
 
-async function removePhoto(treeId, photoId) {
+/* ---- Photo slot targeting: "main:<treeId>" or "task:<treeId>:<taskId>" ---- */
+function parsePhotoTarget(str) {
+  const [kind, treeId, taskId] = str.split(':');
+  return { kind, treeId, taskId };
+}
+function getPhotoSlot(target) {
+  const t = state.trees.find(x => x.id === target.treeId);
+  if (target.kind === 'main') return { get: () => t.mainPhoto, set: p => { t.mainPhoto = p; } };
+  const task = t.tasks.find(x => x.id === target.taskId);
+  return { get: () => task.photo, set: p => { task.photo = p; } };
+}
+
+async function removePhoto(targetStr) {
   const ok = await confirmDialog('Remove this photo?', 'This cannot be undone.');
   if (!ok) return;
-  const t = state.trees.find(x => x.id === treeId);
-  t.photos = t.photos.filter(p => p.id !== photoId);
+  getPhotoSlot(parsePhotoTarget(targetStr)).set(null);
   schedulePersist();
   renderAll();
 }
 
+function renderPhotoBlock(label, photo, targetStr) {
+  if (!photo) {
+    return `
+      <div class="flex gap-2">
+        <button class="chip" data-take-photo="${targetStr}">📷 Take Photo</button>
+        <button class="chip" data-choose-photo="${targetStr}">🖼 Choose</button>
+      </div>`;
+  }
+  return `
+    <div class="flex items-center gap-3">
+      <img src="${photo.hasMarkup ? photo.markupDataUrl : photo.originalDataUrl}" class="w-20 h-20 object-cover rounded-xl border-2 border-brand-200">
+      <div class="flex flex-col gap-1">
+        <button class="text-xs btn-secondary py-1 px-2 rounded-lg" data-remark-photo="${targetStr}">✎ Edit Markup</button>
+        <button class="text-xs btn-danger py-1 px-2" data-remove-photo="${targetStr}">✕ Remove</button>
+      </div>
+      <div class="text-xs opacity-60 ml-auto">Photo ${esc(label)}</div>
+    </div>`;
+}
+
+function taskTotals(task) {
+  const hrs = (parseFloat(task.hours) || 0) + (task.isSplit ? (parseFloat(task.splitHours) || 0) : 0);
+  const price = (parseFloat(task.price) || 0) + (task.isSplit ? (parseFloat(task.splitPrice) || 0) : 0);
+  return { hrs, price };
+}
+function treeTotals(t) {
+  return t.tasks.reduce((acc, task) => {
+    const tt = taskTotals(task);
+    acc.hrs += tt.hrs; acc.price += tt.price;
+    return acc;
+  }, { hrs: 0, price: (parseFloat(t.price) || 0) });
+}
+
 function renderTreeCard(t, idx) {
-  const subtotal = t.tasks.reduce((s, x) => s + (parseFloat(x.hours) || 0), 0);
+  const totals = treeTotals(t);
   if (!t.expanded) {
     return `
       <div class="card p-4 flex items-center justify-between" data-tree-anchor="${t.id}">
         <div class="flex items-center gap-3 min-w-0">
-          <div class="w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold">${idx + 1}</div>
+          ${t.mainPhoto ? `<img src="${t.mainPhoto.hasMarkup ? t.mainPhoto.markupDataUrl : t.mainPhoto.originalDataUrl}" class="w-10 h-10 object-cover rounded-full border-2 border-brand-200">` : `<div class="w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold">${idx + 1}</div>`}
           <div class="min-w-0">
             <div class="font-bold truncate">${esc(t.species) || 'Unspecified Species'}</div>
-            <div class="text-xs opacity-60 truncate">${esc(t.location) || 'No location set'} · ${t.photos.length} photo(s) · ${t.tasks.length} task(s)</div>
+            <div class="text-xs opacity-60 truncate">${esc(t.location) || 'No location set'} · ${t.tasks.length} task(s) · $${money(totals.price)}</div>
           </div>
         </div>
         <button class="btn-secondary tap px-3 text-sm" data-toggle-tree="${t.id}">Edit</button>
       </div>`;
   }
 
-  const photosHtml = t.photos.map(p => `
-    <div class="relative shrink-0 w-28">
-      <img src="${p.hasMarkup ? p.markupDataUrl : p.originalDataUrl}" class="w-28 h-28 object-cover rounded-xl border-2 border-brand-200">
-      <div class="flex gap-1 mt-1">
-        <button class="flex-1 text-xs btn-secondary py-1 rounded-lg" data-remark-photo="${t.id}:${p.id}">✎ Edit</button>
-        <button class="text-xs btn-danger py-1" data-remove-photo="${t.id}:${p.id}">✕</button>
+  const tasksHtml = t.tasks.map((task, taskIdx) => {
+    const tt = taskTotals(task);
+    return `
+    <div class="card p-3 space-y-2" style="border:1px solid #CFE0FB">
+      <div class="flex items-center justify-between">
+        <div class="text-xs font-bold opacity-50">TASK ${photoLabel(idx, taskIdx)}</div>
+        <button class="chip ${task.isSplit ? 'active' : ''} text-xs" data-toggle-split="${t.id}:${task.id}">⚡ Split Job</button>
       </div>
-    </div>`).join('');
-
-  const tasksHtml = t.tasks.map(task => `
-    <div class="card p-3 space-y-2" style="border:1px solid #c7e3d3">
-      <select class="field-input" data-bind="trees.${idx}.tasks.${t.tasks.indexOf(task)}.type">
+      <select class="field-input" data-bind="trees.${idx}.tasks.${taskIdx}.type">
         ${TASK_TYPES.map(opt => `<option value="${opt}" ${opt === task.type ? 'selected' : ''}>${opt}</option>`).join('')}
       </select>
-      ${task.type === 'Other' ? `<input class="field-input" placeholder="Describe task type" data-bind="trees.${idx}.tasks.${t.tasks.indexOf(task)}.customType" value="${esc(task.customType)}">` : ''}
-      <textarea class="field-input" rows="2" placeholder="Task details / specifics" data-bind="trees.${idx}.tasks.${t.tasks.indexOf(task)}.details">${esc(task.details)}</textarea>
-      <div class="flex items-center gap-2">
-        <label class="field-label shrink-0">Est. Hours</label>
-        <input class="field-input" type="number" min="0" step="0.25" placeholder="0.0" data-bind="trees.${idx}.tasks.${t.tasks.indexOf(task)}.hours" data-recalc="${t.id}" value="${esc(task.hours)}">
-        <button class="btn-danger tap shrink-0" data-remove-task="${t.id}:${task.id}">🗑</button>
+      ${task.type === 'Other' ? `<input class="field-input" placeholder="Describe task type" data-bind="trees.${idx}.tasks.${taskIdx}.customType" value="${esc(task.customType)}">` : ''}
+      <textarea class="field-input" rows="2" placeholder="Task details / specifics" data-bind="trees.${idx}.tasks.${taskIdx}.details">${esc(task.details)}</textarea>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="field-label">${task.isSplit ? 'Hours – Job A' : 'Est. Hours'}</label><input class="field-input mt-1" type="number" min="0" step="0.25" placeholder="0.0" data-bind="trees.${idx}.tasks.${taskIdx}.hours" data-recalc="${t.id}" value="${esc(task.hours)}"></div>
+        <div><label class="field-label">${task.isSplit ? 'Price – Job A' : 'Price'}</label><input class="field-input mt-1" type="number" min="0" step="0.01" placeholder="$0.00" data-bind="trees.${idx}.tasks.${taskIdx}.price" data-recalc="${t.id}" value="${esc(task.price)}"></div>
       </div>
-    </div>`).join('');
+      ${task.isSplit ? `
+      <div class="split-box space-y-2">
+        <div class="text-xs font-bold" style="color:#B45309">SPLIT JOB — second billing entry</div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="field-label">Hours – Job B</label><input class="field-input mt-1" type="number" min="0" step="0.25" placeholder="0.0" data-bind="trees.${idx}.tasks.${taskIdx}.splitHours" data-recalc="${t.id}" value="${esc(task.splitHours)}"></div>
+          <div><label class="field-label">Price – Job B</label><input class="field-input mt-1" type="number" min="0" step="0.01" placeholder="$0.00" data-bind="trees.${idx}.tasks.${taskIdx}.splitPrice" data-recalc="${t.id}" value="${esc(task.splitPrice)}"></div>
+        </div>
+      </div>` : ''}
+      <div>
+        <label class="field-label">Task Photo</label>
+        <div class="mt-1">${renderPhotoBlock(photoLabel(idx, taskIdx), task.photo, `task:${t.id}:${task.id}`)}</div>
+      </div>
+      <div class="flex justify-between items-center pt-1">
+        <div class="text-xs opacity-60">Subtotal: <span id="task-subtotal-${task.id}">${tt.hrs.toFixed(2)} hrs · $${money(tt.price)}</span></div>
+        <button class="btn-danger tap shrink-0" data-remove-task="${t.id}:${task.id}">🗑 Remove Task</button>
+      </div>
+    </div>`;
+  }).join('');
 
   return `
     <div class="card p-4 space-y-4" data-tree-anchor="${t.id}">
@@ -493,6 +577,11 @@ function renderTreeCard(t, idx) {
         </div>
       </div>
 
+      <div>
+        <label class="field-label">Main Photo</label>
+        <div class="mt-1">${renderPhotoBlock(photoLabel(idx, null), t.mainPhoto, `main:${t.id}`)}</div>
+      </div>
+
       <div class="grid grid-cols-1 gap-3">
         <div>
           <label class="field-label">Species / Tree Type</label>
@@ -500,7 +589,7 @@ function renderTreeCard(t, idx) {
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div><label class="field-label">DBH</label><input class="field-input mt-1" data-bind="trees.${idx}.dbh" value="${esc(t.dbh)}" placeholder='e.g. 18"'></div>
-          <div><label class="field-label">Height Est.</label><input class="field-input mt-1" data-bind="trees.${idx}.height" value="${esc(t.height)}" placeholder="e.g. 45 ft"></div>
+          <div><label class="field-label">Tree Price</label><input class="field-input mt-1" type="number" min="0" step="0.01" data-bind="trees.${idx}.price" data-recalc="${t.id}" value="${esc(t.price)}" placeholder="$0.00"></div>
         </div>
         <div>
           <label class="field-label">Location on Landscape</label>
@@ -526,19 +615,8 @@ function renderTreeCard(t, idx) {
 
       <div>
         <div class="flex items-center justify-between mb-2">
-          <label class="field-label">Photos</label>
-          <div class="flex gap-2">
-            <button class="chip" data-take-photo="${t.id}">📷 Take Photo</button>
-            <button class="chip" data-choose-photo="${t.id}">🖼 Choose</button>
-          </div>
-        </div>
-        <div class="flex gap-2 overflow-x-auto pb-1">${photosHtml || '<div class="text-sm opacity-60 py-2">No photos yet.</div>'}</div>
-      </div>
-
-      <div>
-        <div class="flex items-center justify-between mb-2">
           <label class="field-label">Work Tasks</label>
-          <div class="text-sm font-bold">Subtotal: <span id="subtotal-${t.id}">${subtotal.toFixed(1)}</span> hrs</div>
+          <div class="text-sm font-bold">Tree Total: <span id="subtotal-${t.id}">${totals.hrs.toFixed(2)} hrs · $${money(totals.price)}</span></div>
         </div>
         <div class="space-y-2">${tasksHtml || '<div class="text-sm opacity-60 py-2">No tasks added yet.</div>'}</div>
         <button class="btn-secondary w-full tap mt-2" data-add-task="${t.id}">+ Add Work Task</button>
@@ -552,7 +630,7 @@ function renderStep2() {
     <div class="space-y-4">
       <div class="flex items-center justify-between">
         <h2 class="font-bold text-lg">Tree &amp; Landscape Inventory</h2>
-        <div class="text-sm font-bold">Total: <span id="grand-total-step2">0.0</span> hrs</div>
+        <div class="text-sm font-bold">Running Total: <span id="grand-total-step2">0.00 hrs · $0.00</span></div>
       </div>
       ${treesHtml}
       <button class="btn-secondary w-full tap" data-add-tree>+ Add Another Tree</button>
@@ -568,9 +646,20 @@ function renderStep2() {
 /* =========================== Step 3: Work Plan & Logistics =========================== */
 function renderStep3() {
   const wp = state.workPlan;
-  const equipmentChips = EQUIPMENT_OPTIONS.map(opt => `
-    <button type="button" class="chip ${wp.equipment.includes(opt) ? 'active' : ''}" data-toggle-equipment="${esc(opt)}">${opt}</button>
+  const equipmentRows = EQUIPMENT_FIELDS.map(f => `
+    <div class="flex items-center gap-2">
+      <label class="field-label flex-1">${f.label}</label>
+      <select class="field-input" style="width:auto" data-bind="workPlan.equipment.${f.key}">
+        ${f.options.map(opt => `<option value="${opt}" ${wp.equipment[f.key] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+      </select>
+      ${f.priceKey && wp.equipment[f.key] !== 'Not Needed' ? `<input class="field-input" style="width:7rem" type="number" min="0" step="0.01" placeholder="$ Price" data-bind="workPlan.equipment.${f.priceKey}" value="${esc(wp.equipment[f.priceKey])}">` : ''}
+    </div>
   `).join('');
+
+  const permitsChips = PERMITS_CHECKLIST.map(opt => `
+    <button type="button" class="chip ${wp.permitsChecklist.includes(opt) ? 'active' : ''}" data-toggle-permit="${esc(opt)}">${opt}</button>
+  `).join('');
+
   const area = (label, path, placeholder) => `
     <div>
       <label class="field-label">${label}</label>
@@ -585,38 +674,32 @@ function renderStep3() {
           <label class="field-label">Crew Size</label>
           <input class="field-input mt-1" data-bind="workPlan.crewSize" value="${esc(wp.crewSize)}" placeholder="e.g. 3-person crew">
         </div>
-        <div>
-          <label class="field-label">Required Equipment</label>
-          <div class="flex flex-wrap gap-2 mt-1">${equipmentChips}</div>
-          <input class="field-input mt-2" data-bind="workPlan.equipmentOther" value="${esc(wp.equipmentOther)}" placeholder="Other equipment (free text)">
-        </div>
+        <div class="space-y-2">${equipmentRows}</div>
+        <input class="field-input mt-2" data-bind="workPlan.equipment.equipmentOther" value="${esc(wp.equipment.equipmentOther)}" placeholder="Other equipment (free text)">
         ${area('Traffic Control Requirements', 'trafficControl', 'Cones, flaggers, street closure, etc.')}
       </div>
 
       <div class="card p-4 space-y-3">
         <h2 class="font-bold text-lg">Access &amp; Permits</h2>
-        <div>
-          <label class="field-label">Neighbor Permission Needed?</label>
-          <div class="flex gap-2 mt-1">
-            <button type="button" class="chip ${wp.neighborPermission === 'yes' ? 'active' : ''}" data-set-neighbor="yes">Yes</button>
-            <button type="button" class="chip ${wp.neighborPermission === 'no' ? 'active' : ''}" data-set-neighbor="no">No</button>
-          </div>
-        </div>
-        ${area('Neighbor Permission Notes', 'neighborNotes', 'Which neighbor, contact info, status...')}
-        ${area('Required Permits', 'permits', 'e.g. City tree removal permit')}
+        <div class="flex flex-wrap gap-2">${permitsChips}</div>
+        <input class="field-input mt-2" data-bind="workPlan.permitsCustom" value="${esc(wp.permitsCustom)}" placeholder="Other / custom permit or access item">
       </div>
 
       <div class="card p-4 space-y-3">
         <h2 class="font-bold text-lg">Safety</h2>
-        ${area('Arborist-Identified Safety Concerns', 'safetyConcerns', 'Power lines, slope, unstable footing, etc.')}
+        <p class="text-xs opacity-70 bg-brand-50 dark:bg-brand-700/40 rounded-lg p-2">
+          For any utility conflict, specify: (1) which tree conflicts with a wire, (2) the conductor class, and
+          (3) whether PEPCO support needs to be a <b>wire drop</b>, <b>shut-off</b>, or <b>cleared</b>.
+        </p>
+        ${area('Arborist-Identified Safety Concerns', 'safetyConcerns', 'e.g. Tree 3 conflicts with secondary conductor — requires PEPCO wire drop before climb.')}
       </div>
 
       <div class="card p-4 space-y-3">
         <h2 class="font-bold text-lg">Notes</h2>
-        ${area('Notes to the Crew (technical execution)', 'crewNotes', 'Internal instructions for the crew performing the work')}
-        ${area('Notes to the Client (scope explanation)', 'clientNotes', 'Professional, client-facing explanation of the proposed scope')}
-        ${area('Administrative Notes (office / billing)', 'adminNotes', 'Reminders for office / billing staff')}
-        ${area('Client Scheduling Preferences', 'schedulingPrefs', 'Preferred days, times, access windows...')}
+        ${area('Crew Notes (technical execution)', 'crewNotes', 'Internal instructions for the crew performing the work')}
+        ${area('Client Notes (scope explanation)', 'clientNotes', 'Professional, client-facing explanation of the proposed scope')}
+        ${area('Internal Notes (office / billing)', 'internalNotes', 'Reminders for office / billing staff')}
+        ${area('Scheduling Concerns', 'schedulingConcerns', 'Preferred days, times, access windows, constraints...')}
       </div>
 
       <div class="flex gap-3 pt-2">
@@ -627,10 +710,24 @@ function renderStep3() {
 }
 
 /* =========================== Step 4: Review & Export =========================== */
+function grandTotals() {
+  return state.trees.reduce((acc, t) => {
+    const tt = treeTotals(t);
+    acc.hrs += tt.hrs; acc.price += tt.price;
+    return acc;
+  }, { hrs: 0, price: 0 });
+}
+
 function renderStep4() {
   const c = state.client;
   const wp = state.workPlan;
-  const grand = state.trees.reduce((s, t) => s + t.tasks.reduce((ss, x) => ss + (parseFloat(x.hours) || 0), 0), 0);
+  const grand = grandTotals();
+  const equipmentSummary = EQUIPMENT_FIELDS
+    .filter(f => wp.equipment[f.key] !== 'Not Needed')
+    .map(f => `${f.label}: ${wp.equipment[f.key]}${f.priceKey && wp.equipment[f.priceKey] ? ' ($' + money(wp.equipment[f.priceKey]) + ')' : ''}`)
+    .concat(wp.equipment.equipmentOther ? [wp.equipment.equipmentOther] : [])
+    .join(', ');
+
   return `
     <div class="space-y-4">
       <div class="card p-4">
@@ -639,11 +736,11 @@ function renderStep4() {
           <button class="btn-secondary tap px-3 text-sm" data-goto-step="1">Edit</button>
         </div>
         <div class="text-sm space-y-1 opacity-90">
-          <div><b>${esc(c.clientName) || '—'}</b></div>
+          <div><b>${esc(c.clientName) || '—'}</b> ${c.singleOpsLead ? '· Lead #' + esc(c.singleOpsLead) : ''}</div>
           <div>${esc(c.propertyAddress) || '—'}</div>
           <div>${esc(c.contactPhone)} ${c.contactEmail ? '· ' + esc(c.contactEmail) : ''}</div>
           <div>Inspection Date: ${esc(c.inspectionDate)}</div>
-          <div>Arborist: ${esc(c.arboristName)} — ${esc(c.credentials)}</div>
+          <div>Arborist: ${esc(c.arboristName) || '—'}</div>
         </div>
       </div>
 
@@ -653,9 +750,9 @@ function renderStep4() {
           <button class="btn-secondary tap px-3 text-sm" data-goto-step="2">Edit</button>
         </div>
         <div class="text-sm space-y-1 opacity-90">
-          ${state.trees.map((t, i) => `<div>${i + 1}. ${esc(t.species) || 'Unspecified'} — ${t.photos.length} photo(s), ${t.tasks.length} task(s)</div>`).join('') || '<div class="opacity-60">No trees added.</div>'}
+          ${state.trees.map((t, i) => `<div>${i + 1}. ${esc(t.species) || 'Unspecified'} — ${t.tasks.length} task(s), $${money(treeTotals(t).price)}</div>`).join('') || '<div class="opacity-60">No trees added.</div>'}
         </div>
-        <div class="mt-2 font-bold">Grand Total Est. Hours: ${grand.toFixed(1)}</div>
+        <div class="mt-2 font-bold">Grand Total: ${grand.hrs.toFixed(2)} hrs · $${money(grand.price)}</div>
       </div>
 
       <div class="card p-4">
@@ -665,9 +762,8 @@ function renderStep4() {
         </div>
         <div class="text-sm space-y-1 opacity-90">
           <div>Crew: ${esc(wp.crewSize) || '—'}</div>
-          <div>Equipment: ${[...wp.equipment, wp.equipmentOther].filter(Boolean).join(', ') || '—'}</div>
-          <div>Neighbor Permission: ${wp.neighborPermission === 'yes' ? 'Yes' : 'No'}</div>
-          <div>Permits: ${esc(wp.permits) || '—'}</div>
+          <div>Equipment: ${esc(equipmentSummary) || '—'}</div>
+          <div>Permits/Access: ${[...wp.permitsChecklist, wp.permitsCustom].filter(Boolean).map(esc).join(', ') || '—'}</div>
         </div>
       </div>
 
@@ -682,9 +778,9 @@ function renderStep4() {
 
       <div class="card p-4 space-y-3">
         <h2 class="font-bold text-lg">Generate Deliverables</h2>
-        <p class="text-sm opacity-70">Produces a PDF report, and a zipped package containing the PDF, a GeoJSON + CSV coordinate file, and a <code>Photos/</code> folder of original &amp; marked-up tree photos named by tree &amp; species — ready for SingleOps proposal entry.</p>
+        <p class="text-sm opacity-70">Produces a PDF report, and a zipped package containing the PDF, a GeoJSON + CSV coordinate file, and a <code>Photos/</code> folder of original &amp; marked-up tree photos labeled by tree number (1, 1a, 1b…) — ready for SingleOps proposal entry.</p>
         <button class="btn-primary w-full tap" id="btnPdf">📄 Download PDF Report</button>
-        <button class="btn-primary w-full tap" id="btnZip" style="background:#1f8f57">🗂 Download Complete Package (.zip)</button>
+        <button class="btn-primary w-full tap" id="btnZip">🗂 Download Complete Package (.zip)</button>
         <div id="exportLinks" class="text-sm space-y-1"></div>
       </div>
 
@@ -695,12 +791,14 @@ function renderStep4() {
 function updateTotals() {
   state.trees.forEach(t => {
     const el = document.getElementById('subtotal-' + t.id);
-    if (el) el.textContent = t.tasks.reduce((s, x) => s + (parseFloat(x.hours) || 0), 0).toFixed(1);
+    if (el) { const tt = treeTotals(t); el.textContent = `${tt.hrs.toFixed(2)} hrs · $${money(tt.price)}`; }
+    t.tasks.forEach(task => {
+      const taskEl = document.getElementById('task-subtotal-' + task.id);
+      if (taskEl) { const tt = taskTotals(task); taskEl.textContent = `${tt.hrs.toFixed(2)} hrs · $${money(tt.price)}`; }
+    });
   });
   const grandEl = document.getElementById('grand-total-step2');
-  if (grandEl) {
-    grandEl.textContent = state.trees.reduce((s, t) => s + t.tasks.reduce((ss, x) => ss + (parseFloat(x.hours) || 0), 0), 0).toFixed(1);
-  }
+  if (grandEl) { const g = grandTotals(); grandEl.textContent = `${g.hrs.toFixed(2)} hrs · $${money(g.price)}`; }
 }
 
 /* =========================== Photo capture + downscale =========================== */
@@ -729,32 +827,39 @@ function downscale(img, maxDim = 1800, quality = 0.85) {
   return { dataUrl: canvas.toDataURL('image/jpeg', quality), width, height };
 }
 
-let pendingTreeIdForPhoto = null;
-function handlePhotoFile(treeId, file) {
+let pendingPhotoTarget = null;
+function handlePhotoFile(targetStr, file) {
   if (!file) return;
-  pendingTreeIdForPhoto = treeId;
   loadImageFromFile(file).then(img => {
     const { dataUrl, width, height } = downscale(img);
     const photo = { id: uid(), originalDataUrl: dataUrl, markupDataUrl: null, hasMarkup: false, width, height };
-    const t = state.trees.find(x => x.id === treeId);
-    t.photos.push(photo);
+    getPhotoSlot(parsePhotoTarget(targetStr)).set(photo);
     schedulePersist();
     renderAll();
-    openMarkupModal(treeId, photo.id);
+    openMarkupModal(targetStr);
   }).catch(() => flashToast('Could not read photo'));
 }
 
 /* =========================== Markup canvas tool =========================== */
 const markup = {
-  treeId: null, photoId: null, baseImage: null, hadBaseMarkup: false,
-  strokes: [], current: null, tool: 'pen', color: '#ff2d2d', width: 6
+  target: null, baseImage: null, hadBaseMarkup: false,
+  strokes: [], current: null, tool: 'pen', color: '#ff2d2d', width: 6,
+  zoom: { scale: 1, tx: 0, ty: 0 }, activePointers: new Map(), pinchStart: null, drawing: false
 };
 
-function openMarkupModal(treeId, photoId) {
-  const t = state.trees.find(x => x.id === treeId);
-  const p = t.photos.find(x => x.id === photoId);
-  markup.treeId = treeId; markup.photoId = photoId; markup.strokes = []; markup.current = null;
+function applyZoomTransform() {
+  const wrap = document.getElementById('markupZoomWrap');
+  wrap.style.transform = `translate(${markup.zoom.tx}px, ${markup.zoom.ty}px) scale(${markup.zoom.scale})`;
+}
+
+function openMarkupModal(targetStr) {
+  const target = parsePhotoTarget(targetStr);
+  const p = getPhotoSlot(target).get();
+  markup.target = targetStr; markup.strokes = []; markup.current = null;
   markup.hadBaseMarkup = p.hasMarkup;
+  markup.zoom = { scale: 1, tx: 0, ty: 0 };
+  markup.activePointers.clear(); markup.pinchStart = null; markup.drawing = false;
+  applyZoomTransform();
 
   const img = new Image();
   img.onload = () => {
@@ -770,13 +875,13 @@ function openMarkupModal(treeId, photoId) {
 }
 
 function renderMarkupToolbar() {
-  const tools = [['pen', '✏️ Pen'], ['arrow', '➡️ Arrow'], ['circle', '⭕ Circle']];
+  const tools = [['pen', '✏️ Pen'], ['arrow', '➡️ Arrow'], ['circle', '⭕ Circle'], ['magnify', '🔎 Magnify'], ['text', '🔤 Text']];
   document.getElementById('markupTools').innerHTML = tools.map(([val, label]) =>
     `<button type="button" class="chip ${markup.tool === val ? 'active' : ''}" data-markup-tool="${val}" style="color:white;border-color:white">${label}</button>`
   ).join('');
   const colors = ['#ff2d2d', '#ffd60a', '#00e0ff', '#ffffff'];
   document.getElementById('markupColors').innerHTML = colors.map(c =>
-    `<button type="button" data-markup-color="${c}" style="background:${c};width:36px;height:36px;border-radius:50%;border:3px solid ${markup.color === c ? '#1f8f57' : 'rgba(255,255,255,.5)'}"></button>`
+    `<button type="button" data-markup-color="${c}" style="background:${c};width:36px;height:36px;border-radius:50%;border:3px solid ${markup.color === c ? '#1A73E8' : 'rgba(255,255,255,.5)'}"></button>`
   ).join('');
   document.getElementById('markupWidth').value = markup.width;
 }
@@ -810,6 +915,23 @@ function drawStroke(ctx, s) {
     const cx = (s.x1 + s.x2) / 2, cy = (s.y1 + s.y2) / 2;
     const rx = Math.abs(s.x2 - s.x1) / 2, ry = Math.abs(s.y2 - s.y1) / 2;
     ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2); ctx.stroke();
+  } else if (s.tool === 'magnify') {
+    const cx = (s.x1 + s.x2) / 2, cy = (s.y1 + s.y2) / 2;
+    const r = Math.max(Math.hypot(s.x2 - s.x1, s.y2 - s.y1) / 2, 14);
+    const zoomFactor = 2.5;
+    const srcR = r / zoomFactor;
+    if (markup.baseImage) {
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+      ctx.drawImage(markup.baseImage, cx - srcR, cy - srcR, srcR * 2, srcR * 2, cx - r, cy - r, r * 2, r * 2);
+      ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(s.width, 3); ctx.stroke();
+  } else if (s.tool === 'text') {
+    ctx.font = `bold ${Math.max(18, s.width * 4)}px sans-serif`;
+    ctx.textBaseline = 'top';
+    ctx.fillText(s.text, s.x, s.y);
   }
 }
 
@@ -824,24 +946,72 @@ function redrawMarkup() {
 
 function wireMarkupCanvas() {
   const canvas = document.getElementById('markupCanvas');
-  let drawing = false;
+
   canvas.addEventListener('pointerdown', e => {
-    drawing = true;
+    markup.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (markup.activePointers.size === 2) {
+      markup.drawing = false; markup.current = null; redrawMarkup();
+      const pts = [...markup.activePointers.values()];
+      const wrap = document.getElementById('markupZoomWrap');
+      const viewport = document.getElementById('markupViewport');
+      const viewportRect = viewport.getBoundingClientRect();
+      const postRect = wrap.getBoundingClientRect();
+      const staticLeft = postRect.left - viewportRect.left - markup.zoom.tx;
+      const staticTop = postRect.top - viewportRect.top - markup.zoom.ty;
+      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      markup.pinchStart = {
+        dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+        scale: markup.zoom.scale, viewportRect, staticLeft, staticTop,
+        ax: (mid.x - viewportRect.left - staticLeft - markup.zoom.tx) / markup.zoom.scale,
+        ay: (mid.y - viewportRect.top - staticTop - markup.zoom.ty) / markup.zoom.scale
+      };
+      return;
+    }
+    if (markup.activePointers.size > 2 || markup.pinchStart) return;
+
     const [x, y] = canvasPoint(e);
+    if (markup.tool === 'text') {
+      const txt = prompt('Enter label text:');
+      if (txt) {
+        markup.strokes.push({ tool: 'text', color: markup.color, width: markup.width, x, y, text: txt });
+        redrawMarkup();
+      }
+      return;
+    }
+    markup.drawing = true;
     if (markup.tool === 'pen') markup.current = { tool: 'pen', color: markup.color, width: markup.width, points: [[x, y]] };
     else markup.current = { tool: markup.tool, color: markup.color, width: markup.width, x1: x, y1: y, x2: x, y2: y };
     redrawMarkup();
   });
+
   canvas.addEventListener('pointermove', e => {
-    if (!drawing || !markup.current) return;
+    if (markup.activePointers.has(e.pointerId)) markup.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (markup.activePointers.size === 2 && markup.pinchStart) {
+      const pts = [...markup.activePointers.values()];
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      const ps = markup.pinchStart;
+      const newScale = Math.min(4, Math.max(1, ps.scale * (dist / ps.dist)));
+      markup.zoom.scale = newScale;
+      markup.zoom.tx = mid.x - ps.viewportRect.left - ps.staticLeft - newScale * ps.ax;
+      markup.zoom.ty = mid.y - ps.viewportRect.top - ps.staticTop - newScale * ps.ay;
+      applyZoomTransform();
+      return;
+    }
+    if (!markup.drawing || !markup.current) return;
     const [x, y] = canvasPoint(e);
     if (markup.tool === 'pen') markup.current.points.push([x, y]);
     else { markup.current.x2 = x; markup.current.y2 = y; }
     redrawMarkup();
   });
-  function finish() {
-    if (drawing && markup.current) { markup.strokes.push(markup.current); markup.current = null; }
-    drawing = false;
+
+  function finish(e) {
+    markup.activePointers.delete(e.pointerId);
+    if (markup.activePointers.size < 2) markup.pinchStart = null;
+    if (markup.drawing && markup.current) { markup.strokes.push(markup.current); markup.current = null; }
+    markup.drawing = false;
     redrawMarkup();
   }
   canvas.addEventListener('pointerup', finish);
@@ -870,11 +1040,11 @@ function renderSiteMapCanvas(width = 600, height = 440) {
   const canvas = document.createElement('canvas');
   canvas.width = width; canvas.height = height;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#eafbf0'; ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = '#EAF1FB'; ctx.fillRect(0, 0, width, height);
 
   const pts = geoPoints();
   if (!pts.length) {
-    ctx.fillStyle = '#1f4d36'; ctx.font = '16px sans-serif';
+    ctx.fillStyle = '#1A73E8'; ctx.font = '16px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('No GPS coordinates captured yet', width / 2, height / 2);
     return canvas;
@@ -899,41 +1069,45 @@ function renderSiteMapCanvas(width = 600, height = 440) {
     ];
   }
 
-  ctx.strokeStyle = '#a6e7c1'; ctx.lineWidth = 1;
+  ctx.strokeStyle = '#AECBFA'; ctx.lineWidth = 1;
   ctx.strokeRect(pad, pad, width - 2 * pad, height - 2 * pad);
 
   const scaleMeters = niceRoundScale(span / 4);
   const scalePx = scaleMeters / (maxX - minX) * (width - 2 * pad);
-  ctx.strokeStyle = '#1f4d36'; ctx.lineWidth = 2;
+  ctx.strokeStyle = '#1A73E8'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(pad, height - 20); ctx.lineTo(pad + scalePx, height - 20); ctx.stroke();
-  ctx.fillStyle = '#1f4d36'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#1A73E8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   ctx.fillText(`${scaleMeters} m`, pad, height - 26);
 
   ctx.save();
   ctx.translate(width - 30, 36);
-  ctx.strokeStyle = '#1f4d36'; ctx.lineWidth = 2;
+  ctx.strokeStyle = '#1A73E8'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(0, 14); ctx.lineTo(0, -14); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(-5, -5); ctx.lineTo(5, -5); ctx.closePath();
-  ctx.fillStyle = '#1f4d36'; ctx.fill();
+  ctx.fillStyle = '#1A73E8'; ctx.fill();
   ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('N', 0, -18);
   ctx.restore();
 
   xy.forEach(p => {
     const [px, py] = project(p.x, p.y);
     ctx.beginPath(); ctx.arc(px, py, 10, 0, Math.PI * 2);
-    ctx.fillStyle = '#1f8f57'; ctx.fill();
+    ctx.fillStyle = '#1A73E8'; ctx.fill();
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
     ctx.fillStyle = '#ffffff'; ctx.font = 'bold 10px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(String(p.i + 1), px, py + 1);
-    ctx.fillStyle = '#0f2e1e'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#0B1220'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'alphabetic';
     ctx.fillText((p.t.species || 'Tree ' + (p.i + 1)).slice(0, 18), px, py + 22);
   });
   return canvas;
 }
 
 function taskSummaryLine(t) {
-  return t.tasks.map(x => (x.type === 'Other' ? (x.customType || 'Other') : x.type) + (x.hours ? ` [${x.hours}h]` : '')).join('; ');
+  return t.tasks.map(x => {
+    const tt = taskTotals(x);
+    const label = x.type === 'Other' ? (x.customType || 'Other') : x.type;
+    return `${label} [${tt.hrs}h / $${money(tt.price)}]${x.isSplit ? ' (SPLIT)' : ''}`;
+  }).join('; ');
 }
 
 function buildGeoJSON() {
@@ -941,6 +1115,7 @@ function buildGeoJSON() {
     type: 'FeatureCollection',
     features: state.trees.map((t, i) => {
       const lat = parseFloat(t.gps.lat), lng = parseFloat(t.gps.lng);
+      const totals = treeTotals(t);
       return {
         type: 'Feature',
         geometry: (isFinite(lat) && isFinite(lng)) ? { type: 'Point', coordinates: [lng, lat] } : null,
@@ -948,12 +1123,13 @@ function buildGeoJSON() {
           treeNumber: i + 1,
           species: t.species || '',
           dbh: t.dbh || '',
-          heightEstimate: t.height || '',
           location: t.location || '',
+          treePrice: t.price || '',
           gpsAccuracyMeters: t.gps.accuracy || null,
           tasks: taskSummaryLine(t),
-          estimatedHours: t.tasks.reduce((s, x) => s + (parseFloat(x.hours) || 0), 0),
-          photoCount: t.photos.length
+          estimatedHours: totals.hrs,
+          estimatedPrice: totals.price,
+          hasMainPhoto: !!t.mainPhoto
         }
       };
     })
@@ -965,12 +1141,15 @@ function csvEscape(v) {
   return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
 }
 function buildCsv() {
-  const headers = ['Tree#', 'Species', 'DBH', 'HeightEstimate', 'Location', 'Latitude', 'Longitude', 'GPSAccuracy_m', 'Tasks', 'EstHours', 'PhotoCount'];
-  const rows = state.trees.map((t, i) => [
-    i + 1, t.species, t.dbh, t.height, t.location,
-    t.gps.lat || '', t.gps.lng || '', t.gps.accuracy ? Math.round(t.gps.accuracy) : '',
-    taskSummaryLine(t), t.tasks.reduce((s, x) => s + (parseFloat(x.hours) || 0), 0).toFixed(2), t.photos.length
-  ]);
+  const headers = ['Tree#', 'Species', 'DBH', 'Location', 'TreePrice', 'Latitude', 'Longitude', 'GPSAccuracy_m', 'Tasks', 'EstHours', 'EstPrice'];
+  const rows = state.trees.map((t, i) => {
+    const totals = treeTotals(t);
+    return [
+      i + 1, t.species, t.dbh, t.location, t.price,
+      t.gps.lat || '', t.gps.lng || '', t.gps.accuracy ? Math.round(t.gps.accuracy) : '',
+      taskSummaryLine(t), totals.hrs.toFixed(2), totals.price.toFixed(2)
+    ];
+  });
   return [headers, ...rows].map(r => r.map(csvEscape).join(',')).join('\r\n');
 }
 
@@ -1000,9 +1179,9 @@ async function buildPdf() {
 
   function heading(text, size = 13) {
     ensure(28);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(size); doc.setTextColor(23, 61, 43);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(size); doc.setTextColor(21, 41, 74);
     doc.text(text, MARGIN, y); y += 8;
-    doc.setDrawColor(31, 77, 54); doc.setLineWidth(1.2);
+    doc.setDrawColor(26, 115, 232); doc.setLineWidth(1.2);
     doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += 16;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(20, 20, 20);
   }
@@ -1034,103 +1213,124 @@ async function buildPdf() {
     y += boxH + 14;
   }
 
-  function taskTable(tasks) {
-    const colTask = 140, colHours = 60, colDetails = CONTENT_W - colTask - colHours;
+  function taskTable(tasks, treeIdx) {
+    const colTask = 150, colHours = 55, colPrice = 65, colDetails = CONTENT_W - colTask - colHours - colPrice;
     ensure(20);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(255);
-    doc.setFillColor(31, 77, 54);
+    doc.setFillColor(21, 41, 74);
     doc.rect(MARGIN, y, CONTENT_W, 18, 'F');
     doc.text('TASK', MARGIN + 6, y + 12);
     doc.text('DETAILS', MARGIN + colTask + 6, y + 12);
-    doc.text('EST. HRS', MARGIN + colTask + colDetails + 6, y + 12);
+    doc.text('HRS', MARGIN + colTask + colDetails + 6, y + 12);
+    doc.text('PRICE', MARGIN + colTask + colDetails + colHours + 6, y + 12);
     y += 18;
-    let subtotal = 0;
+    let subtotalHrs = 0, subtotalPrice = 0;
     tasks.forEach((task, i) => {
-      const typeLabel = task.type === 'Other' ? (task.customType || 'Other') : task.type;
+      const typeLabel = `${photoLabel(treeIdx, i)}. ${task.type === 'Other' ? (task.customType || 'Other') : task.type}`;
       const typeLines = doc.splitTextToSize(typeLabel, colTask - 10);
       const detailLines = doc.splitTextToSize(task.details || '—', colDetails - 10);
-      const rowH = Math.max(typeLines.length, detailLines.length, 1) * 12 + 8;
+      const tt = taskTotals(task);
+      const extraLines = task.isSplit ? [`⚡ SPLIT — Job A: ${(parseFloat(task.hours) || 0).toFixed(2)}h/$${money(task.price)} · Job B: ${(parseFloat(task.splitHours) || 0).toFixed(2)}h/$${money(task.splitPrice)}`] : [];
+      const bodyLineCount = Math.max(typeLines.length, detailLines.length, 1);
+      const rowH = (bodyLineCount + extraLines.length) * 12 + 8;
       ensure(rowH);
-      if (i % 2 === 0) { doc.setFillColor(238, 246, 241); doc.rect(MARGIN, y, CONTENT_W, rowH, 'F'); }
+      if (i % 2 === 0) { doc.setFillColor(232, 240, 254); doc.rect(MARGIN, y, CONTENT_W, rowH, 'F'); }
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(20);
       typeLines.forEach((ln, j) => doc.text(ln, MARGIN + 6, y + 12 + j * 12));
       doc.setFont('helvetica', 'normal');
       detailLines.forEach((ln, j) => doc.text(ln, MARGIN + colTask + 6, y + 12 + j * 12));
-      const hrs = parseFloat(task.hours) || 0;
-      subtotal += hrs;
-      doc.text(hrs ? hrs.toFixed(2) : '—', MARGIN + colTask + colDetails + 6, y + 12);
+      doc.text(tt.hrs ? tt.hrs.toFixed(2) : '—', MARGIN + colTask + colDetails + 6, y + 12);
+      doc.text(tt.price ? '$' + money(tt.price) : '—', MARGIN + colTask + colDetails + colHours + 6, y + 12);
+      if (extraLines.length) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(180, 83, 9);
+        doc.text(extraLines[0], MARGIN + 6, y + 12 + bodyLineCount * 12);
+      }
+      subtotalHrs += tt.hrs; subtotalPrice += tt.price;
       y += rowH;
     });
     y += 4;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(23, 61, 43);
-    doc.text(`Subtotal Est. Hours: ${subtotal.toFixed(2)}`, PAGE_W - MARGIN, y, { align: 'right' });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(21, 41, 74);
+    doc.text(`Task Subtotal: ${subtotalHrs.toFixed(2)} hrs · $${money(subtotalPrice)}`, PAGE_W - MARGIN, y, { align: 'right' });
     y += 16;
-    return subtotal;
+    return { hrs: subtotalHrs, price: subtotalPrice };
   }
 
-  function photosGrid(photos) {
-    if (!photos.length) return;
+  function photosGrid(photoLabelPairs) {
+    const items = photoLabelPairs.filter(pair => pair.photo);
+    if (!items.length) return;
     const gap = 14, boxW = (CONTENT_W - gap) / 2, boxH = 190;
-    for (let i = 0; i < photos.length; i += 2) {
+    for (let i = 0; i < items.length; i += 2) {
       ensure(boxH + 10);
-      const rowPhotos = [photos[i], photos[i + 1]].filter(Boolean);
-      rowPhotos.forEach((p, col) => {
+      const row = [items[i], items[i + 1]].filter(Boolean);
+      row.forEach((item, col) => {
+        const p = item.photo;
         const x = MARGIN + col * (boxW + gap);
         const fit = fitBox(p.width, p.height, boxW, boxH - 16);
         const ix = x + (boxW - fit.w) / 2;
         const src = p.hasMarkup ? p.markupDataUrl : p.originalDataUrl;
         try { doc.addImage(src, 'JPEG', ix, y, fit.w, fit.h); } catch (e) {}
         doc.setFontSize(8); doc.setTextColor(100); doc.setFont('helvetica', 'normal');
-        doc.text(`Photo ${photos.indexOf(p) + 1}${p.hasMarkup ? ' (markup)' : ''}`, x + boxW / 2, y + boxH - 4, { align: 'center' });
+        doc.text(`Photo ${item.label}${p.hasMarkup ? ' (markup)' : ''}`, x + boxW / 2, y + boxH - 4, { align: 'center' });
       });
       y += boxH + 10;
     }
   }
 
   // Cover / header
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(23, 61, 43);
-  doc.text('Tree Health & Landscape Inspection Report', MARGIN, y); y += 22;
-  if (state.client.companyName) {
-    doc.setFontSize(11); doc.setTextColor(60);
-    doc.text(state.client.companyName, MARGIN, y); y += 18;
-  }
-  doc.setDrawColor(31, 77, 54); doc.setLineWidth(1.5); doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += 16;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(21, 41, 74);
+  doc.text('RTEC GTW Job Builder — Tree & Landscape Inspection Report', MARGIN, y); y += 22;
+  doc.setDrawColor(26, 115, 232); doc.setLineWidth(1.5); doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += 16;
 
+  labelValue('SingleOps Lead #', state.client.singleOpsLead);
   labelValue('Client', state.client.clientName);
-  labelValue('Property Address', state.client.propertyAddress);
+  labelValue('Job Site Address', state.client.propertyAddress);
   labelValue('Contact', [state.client.contactName, state.client.contactPhone, state.client.contactEmail].filter(Boolean).join(' · '));
   labelValue('Inspection Date', state.client.inspectionDate);
-  labelValue('Prepared By', [state.client.arboristName, state.client.credentials, state.client.certNumber ? ('Cert #' + state.client.certNumber) : ''].filter(Boolean).join(' — '));
+  labelValue('Arborist', state.client.arboristName);
   y += 6;
 
   heading('Tree & Landscape Inventory');
-  let grandTotal = 0;
+  let runningHrs = 0, runningPrice = 0;
   state.trees.forEach((t, i) => {
     ensure(24);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(31, 77, 54);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(26, 115, 232);
     doc.text(`Tree ${i + 1}: ${t.species || 'Unspecified Species'}`, MARGIN, y); y += 16;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(20);
+
+    photosGrid([{ label: photoLabel(i, null), photo: t.mainPhoto }]);
+
     labelValue('Location', t.location, 100);
-    labelValue('DBH / Height', `${t.dbh || '—'} DBH, ${t.height || '—'} height`, 100);
-    photosGrid(t.photos);
-    if (t.tasks.length) grandTotal += taskTable(t.tasks);
-    y += 8;
+    labelValue('DBH', t.dbh, 100);
+    if (t.gps.lat && t.gps.lng) labelValue('GPS', `${t.gps.lat}, ${t.gps.lng}${t.gps.accuracy ? ` (±${Math.round(t.gps.accuracy)}m)` : ''}`, 100);
+    if (t.price) labelValue('Tree Price', '$' + money(t.price), 100);
+
+    const taskSub = t.tasks.length ? taskTable(t.tasks, i) : { hrs: 0, price: 0 };
+    photosGrid(t.tasks.map((task, ti) => ({ label: photoLabel(i, ti), photo: task.photo })));
+
+    const treeHrs = taskSub.hrs, treePrice = taskSub.price + (parseFloat(t.price) || 0);
+    runningHrs += treeHrs; runningPrice += treePrice;
+    ensure(14);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120);
+    doc.text(`Running Total Through Tree ${i + 1}: ${runningHrs.toFixed(2)} hrs · $${money(runningPrice)}`, PAGE_W - MARGIN, y, { align: 'right' });
+    y += 18;
   });
   if (!state.trees.length) {
     doc.setFontSize(10); doc.setTextColor(100);
     doc.text('No trees were recorded for this inspection.', MARGIN, y); y += 16;
   }
 
-  ensure(24);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(23, 61, 43);
-  doc.text(`Grand Total Estimated Labor Hours: ${grandTotal.toFixed(2)}`, MARGIN, y);
-  y += 24;
+  ensure(30);
+  doc.setFillColor(232, 240, 254);
+  doc.roundedRect(MARGIN, y, CONTENT_W, 26, 6, 6, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(21, 41, 74);
+  doc.text(`GRAND TOTAL: ${runningHrs.toFixed(2)} hrs · $${money(runningPrice)}`, MARGIN + 12, y + 18);
+  y += 38;
 
   heading('Site Map & GPS Reference');
   const gc1 = 32, gc2 = 160, gc3 = (CONTENT_W - gc1 - gc2) / 2;
   ensure(18);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(255);
-  doc.setFillColor(31, 77, 54); doc.rect(MARGIN, y, CONTENT_W, 18, 'F');
+  doc.setFillColor(21, 41, 74); doc.rect(MARGIN, y, CONTENT_W, 18, 'F');
   doc.text('#', MARGIN + 6, y + 12);
   doc.text('SPECIES', MARGIN + gc1 + 6, y + 12);
   doc.text('LATITUDE', MARGIN + gc1 + gc2 + 6, y + 12);
@@ -1139,7 +1339,7 @@ async function buildPdf() {
   state.trees.forEach((t, i) => {
     const rowH = 16;
     ensure(rowH);
-    if (i % 2 === 0) { doc.setFillColor(238, 246, 241); doc.rect(MARGIN, y, CONTENT_W, rowH, 'F'); }
+    if (i % 2 === 0) { doc.setFillColor(232, 240, 254); doc.rect(MARGIN, y, CONTENT_W, rowH, 'F'); }
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(20);
     doc.text(String(i + 1), MARGIN + 6, y + 11);
     doc.text((t.species || 'Unspecified').slice(0, 26), MARGIN + gc1 + 6, y + 11);
@@ -1153,7 +1353,7 @@ async function buildPdf() {
   const mapCanvas = renderSiteMapCanvas(900, 660);
   const mapFit = fitBox(mapCanvas.width, mapCanvas.height, CONTENT_W, 320);
   ensure(mapFit.h + 20);
-  doc.setDrawColor(199, 227, 211); doc.setLineWidth(1);
+  doc.setDrawColor(207, 224, 251); doc.setLineWidth(1);
   doc.rect(MARGIN, y, mapFit.w, mapFit.h);
   try { doc.addImage(mapCanvas.toDataURL('image/png'), 'PNG', MARGIN, y, mapFit.w, mapFit.h); } catch (e) {}
   y += mapFit.h + 10;
@@ -1164,17 +1364,20 @@ async function buildPdf() {
   const wp = state.workPlan;
   heading('Work Plan & Logistics Summary');
   labelValue('Crew Size', wp.crewSize);
-  labelValue('Equipment Needed', [...wp.equipment, wp.equipmentOther].filter(Boolean).join(', '));
+  const equipLines = EQUIPMENT_FIELDS
+    .filter(f => wp.equipment[f.key] !== 'Not Needed')
+    .map(f => `${f.label}: ${wp.equipment[f.key]}${f.priceKey && wp.equipment[f.priceKey] ? ' ($' + money(wp.equipment[f.priceKey]) + ')' : ''}`)
+    .concat(wp.equipment.equipmentOther ? [wp.equipment.equipmentOther] : []);
+  labelValue('Equipment Needed', equipLines.join('; '));
   labelValue('Traffic Control', wp.trafficControl);
-  labelValue('Neighbor Permission', (wp.neighborPermission === 'yes' ? 'Yes' : 'No') + (wp.neighborNotes ? ' — ' + wp.neighborNotes : ''));
-  labelValue('Required Permits', wp.permits);
+  labelValue('Access / Permits', [...wp.permitsChecklist, wp.permitsCustom].filter(Boolean).join(', '));
   labelValue('Safety Concerns', wp.safetyConcerns);
-  labelValue('Scheduling Preferences', wp.schedulingPrefs);
+  labelValue('Scheduling Concerns', wp.schedulingConcerns);
   y += 8;
 
   paragraphBox('CREW WORK ORDER — INTERNAL USE', wp.crewNotes, [155, 28, 28]);
-  paragraphBox('CLIENT-FACING PROPOSAL NOTES', wp.clientNotes, [31, 143, 87]);
-  paragraphBox('ADMINISTRATIVE / OFFICE NOTES', wp.adminNotes, [30, 90, 160]);
+  paragraphBox('CLIENT-FACING PROPOSAL NOTES', wp.clientNotes, [26, 115, 232]);
+  paragraphBox('INTERNAL NOTES — OFFICE / BILLING', wp.internalNotes, [21, 41, 74]);
 
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
@@ -1234,13 +1437,14 @@ async function exportZip() {
   zip.file(`Trees_${clientSlug}_${date}.csv`, buildCsv());
   const photosFolder = zip.folder('Photos');
   state.trees.forEach((t, idx) => {
-    const treeNum = String(idx + 1).padStart(2, '0');
     const speciesSlug = slugify(t.species || 'Tree');
-    t.photos.forEach((p, pi) => {
-      const suffix = t.photos.length > 1 ? `_${pi + 1}` : '';
-      photosFolder.file(`Tree_${treeNum}_${speciesSlug}${suffix}.jpg`, dataURLtoBlob(p.originalDataUrl));
-      if (p.hasMarkup) photosFolder.file(`Tree_${treeNum}_${speciesSlug}${suffix}_markup.jpg`, dataURLtoBlob(p.markupDataUrl));
-    });
+    function addPhotoFile(photo, label) {
+      if (!photo) return;
+      photosFolder.file(`Tree_${speciesSlug}_${label}.jpg`, dataURLtoBlob(photo.originalDataUrl));
+      if (photo.hasMarkup) photosFolder.file(`Tree_${speciesSlug}_${label}_markup.jpg`, dataURLtoBlob(photo.markupDataUrl));
+    }
+    addPhotoFile(t.mainPhoto, photoLabel(idx, null));
+    t.tasks.forEach((task, ti) => addPhotoFile(task.photo, photoLabel(idx, ti)));
   });
   const blob = await zip.generateAsync({ type: 'blob' });
   const name = `SingleOps_Package_${clientSlug}_${date}.zip`;
@@ -1287,7 +1491,7 @@ document.addEventListener('click', async e => {
 
   if (el.closest('[data-next-from-1]')) {
     if (!state.client.clientName || !state.client.propertyAddress) {
-      flashToast('Enter client name and address to continue');
+      flashToast('Enter client name and job site address to continue');
       return;
     }
     goToStep(2); return;
@@ -1307,50 +1511,42 @@ document.addEventListener('click', async e => {
   const remT = el.closest('[data-remove-task]');
   if (remT) { const [treeId, taskId] = remT.dataset.removeTask.split(':'); removeTask(treeId, taskId); return; }
 
+  const splitT = el.closest('[data-toggle-split]');
+  if (splitT) { const [treeId, taskId] = splitT.dataset.toggleSplit.split(':'); toggleSplit(treeId, taskId); return; }
+
   const remP = el.closest('[data-remove-photo]');
-  if (remP) { const [treeId, photoId] = remP.dataset.removePhoto.split(':'); removePhoto(treeId, photoId); return; }
+  if (remP) { removePhoto(remP.dataset.removePhoto); return; }
 
   const remarkP = el.closest('[data-remark-photo]');
-  if (remarkP) { const [treeId, photoId] = remarkP.dataset.remarkPhoto.split(':'); openMarkupModal(treeId, photoId); return; }
+  if (remarkP) { openMarkupModal(remarkP.dataset.remarkPhoto); return; }
+
+  const takePhoto = el.closest('[data-take-photo]');
+  if (takePhoto) { pendingPhotoTarget = takePhoto.dataset.takePhoto; document.getElementById('fileCamera').click(); return; }
+  const choosePhoto = el.closest('[data-choose-photo]');
+  if (choosePhoto) { pendingPhotoTarget = choosePhoto.dataset.choosePhoto; document.getElementById('fileLibrary').click(); return; }
 
   const capGps = el.closest('[data-capture-gps]');
   if (capGps) { captureGps(capGps.dataset.captureGps); return; }
 
-  const takePhoto = el.closest('[data-take-photo]');
-  if (takePhoto) {
-    pendingTreeIdForPhoto = takePhoto.dataset.takePhoto;
-    document.getElementById('fileCamera').click();
-    return;
-  }
-  const choosePhoto = el.closest('[data-choose-photo]');
-  if (choosePhoto) {
-    pendingTreeIdForPhoto = choosePhoto.dataset.choosePhoto;
-    document.getElementById('fileLibrary').click();
-    return;
-  }
-
-  const toggleEquip = el.closest('[data-toggle-equipment]');
-  if (toggleEquip) {
-    const val = toggleEquip.dataset.toggleEquipment;
-    const arr = state.workPlan.equipment;
+  const togglePermit = el.closest('[data-toggle-permit]');
+  if (togglePermit) {
+    const val = togglePermit.dataset.togglePermit;
+    const arr = state.workPlan.permitsChecklist;
     const i = arr.indexOf(val);
     if (i === -1) arr.push(val); else arr.splice(i, 1);
     schedulePersist(); renderAll();
     return;
   }
 
-  const setNeighbor = el.closest('[data-set-neighbor]');
-  if (setNeighbor) { state.workPlan.neighborPermission = setNeighbor.dataset.setNeighbor; schedulePersist(); renderAll(); return; }
-
   const mTool = el.closest('[data-markup-tool]');
   if (mTool) { markup.tool = mTool.dataset.markupTool; renderMarkupToolbar(); return; }
   const mColor = el.closest('[data-markup-color]');
   if (mColor) { markup.color = mColor.dataset.markupColor; renderMarkupToolbar(); return; }
 
+  if (el.id === 'markupResetZoom') { markup.zoom = { scale: 1, tx: 0, ty: 0 }; applyZoomTransform(); return; }
   if (el.id === 'markupUndo') { markup.strokes.pop(); redrawMarkup(); return; }
   if (el.id === 'markupClear') {
-    const t = state.trees.find(x => x.id === markup.treeId);
-    const p = t.photos.find(x => x.id === markup.photoId);
+    const p = getPhotoSlot(parsePhotoTarget(markup.target)).get();
     markup.strokes = []; markup.current = null; markup.hadBaseMarkup = false;
     const img = new Image();
     img.onload = () => { markup.baseImage = img; redrawMarkup(); };
@@ -1360,8 +1556,8 @@ document.addEventListener('click', async e => {
   if (el.id === 'markupClose' || el.id === 'markupCancel') { document.getElementById('markupModal').classList.add('hidden'); return; }
   if (el.id === 'markupSave') {
     const canvas = document.getElementById('markupCanvas');
-    const t = state.trees.find(x => x.id === markup.treeId);
-    const p = t.photos.find(x => x.id === markup.photoId);
+    const slot = getPhotoSlot(parsePhotoTarget(markup.target));
+    const p = slot.get();
     p.hasMarkup = markup.hadBaseMarkup || markup.strokes.length > 0;
     p.markupDataUrl = p.hasMarkup ? canvas.toDataURL('image/jpeg', 0.88) : null;
     document.getElementById('markupModal').classList.add('hidden');
@@ -1388,9 +1584,9 @@ document.getElementById('markupWidth').addEventListener('input', e => { markup.w
 document.addEventListener('change', e => {
   if (e.target.id === 'fileCamera' || e.target.id === 'fileLibrary') {
     const file = e.target.files[0];
-    const treeId = pendingTreeIdForPhoto;
+    const target = pendingPhotoTarget;
     e.target.value = '';
-    if (file && treeId) handlePhotoFile(treeId, file);
+    if (file && target) handlePhotoFile(target, file);
   }
 });
 
@@ -1399,9 +1595,43 @@ document.getElementById('themeToggle').addEventListener('click', () => {
   try { localStorage.setItem('arborist_theme', isDark ? 'dark' : 'light'); } catch (e) {}
 });
 
-/* =========================== Init =========================== */
+/* =========================== Init / migration =========================== */
 function applySpeciesList() {
   document.getElementById('speciesList').innerHTML = SPECIES_OPTIONS.map(s => `<option value="${esc(s)}">`).join('');
+}
+
+function migrateState() {
+  const c = state.client;
+  if (c.singleOpsLead === undefined) c.singleOpsLead = '';
+  delete c.companyName; delete c.credentials; delete c.certNumber;
+
+  if (!state.workPlan.equipment || Array.isArray(state.workPlan.equipment)) {
+    state.workPlan.equipment = defaultEquipment();
+  }
+  EQUIPMENT_FIELDS.forEach(f => {
+    if (state.workPlan.equipment[f.key] === undefined) state.workPlan.equipment[f.key] = 'Not Needed';
+    if (f.priceKey && state.workPlan.equipment[f.priceKey] === undefined) state.workPlan.equipment[f.priceKey] = '';
+  });
+  if (state.workPlan.permitsChecklist === undefined) state.workPlan.permitsChecklist = [];
+  if (state.workPlan.permitsCustom === undefined) state.workPlan.permitsCustom = state.workPlan.permits || '';
+  if (state.workPlan.internalNotes === undefined) state.workPlan.internalNotes = state.workPlan.adminNotes || '';
+  if (state.workPlan.schedulingConcerns === undefined) state.workPlan.schedulingConcerns = state.workPlan.schedulingPrefs || '';
+  delete state.workPlan.permits; delete state.workPlan.adminNotes; delete state.workPlan.schedulingPrefs;
+  delete state.workPlan.neighborPermission; delete state.workPlan.neighborNotes;
+
+  state.trees.forEach(t => {
+    if (!t.gps) t.gps = defaultGps();
+    if (t.price === undefined) t.price = '';
+    if (t.mainPhoto === undefined) t.mainPhoto = (t.photos && t.photos[0]) || null;
+    delete t.height; delete t.photos;
+    (t.tasks || []).forEach(task => {
+      if (task.price === undefined) task.price = '';
+      if (task.isSplit === undefined) task.isSplit = false;
+      if (task.splitHours === undefined) task.splitHours = '';
+      if (task.splitPrice === undefined) task.splitPrice = '';
+      if (task.photo === undefined) task.photo = null;
+    });
+  });
 }
 
 async function init() {
@@ -1420,7 +1650,7 @@ async function init() {
       if (raw) state = Object.assign(defaultState(), JSON.parse(raw));
     } catch (e2) {}
   }
-  state.trees.forEach(t => { if (!t.gps) t.gps = { lat: '', lng: '', accuracy: null, capturedAt: null }; });
+  migrateState();
 
   wireMarkupCanvas();
   renderAll();

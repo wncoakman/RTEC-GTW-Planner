@@ -1,13 +1,13 @@
 {
-  "name": "Arborist Field Inspection",
-  "short_name": "TreeInspect",
-  "description": "Offline field inspection tool for tree health assessments — client info, tree-by-tree photo markup, work plans, and PDF/ZIP export for SingleOps proposals.",
+  "name": "RTEC GTW Job Builder",
+  "short_name": "GTW Builder",
+  "description": "Offline field job-builder for tree inspections — GPS-tagged tree inventory, photo markup, itemized pricing, and PDF/GeoJSON/ZIP export for SingleOps proposals.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0f2e1e",
-  "theme_color": "#1f4d36",
+  "background_color": "#F3F6FB",
+  "theme_color": "#1A73E8",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
