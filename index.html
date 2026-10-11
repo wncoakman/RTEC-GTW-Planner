@@ -155,7 +155,7 @@ function newState(){
     workPlan: '',
     safety: '',
     accessPermits: { standard:{ neighborPermission:false,dominion:false,pepco:false,parkingPermits:false,missUtility:false,ddotRemoval:false }, custom:[] },
-    notes: { crew:'', client:'', internal:'', scheduling:'' }
+    notes: { crew:'', client:'', internal:'', scheduling:'', trafficControl:'' }
   };
 }
 let state = newState();
@@ -759,8 +759,10 @@ function renderStepLogistics(){
         <textarea data-bind="notes.client" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2">${esc(n.client)}</textarea></label>
       <label class="block text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Internal Notes</span>
         <textarea data-bind="notes.internal" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2">${esc(n.internal)}</textarea></label>
-      <label class="block text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Scheduling Concerns (incl. Traffic Control)</span>
-        <textarea data-bind="notes.scheduling" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2">${esc(n.scheduling)}</textarea></label>
+      <label class="block text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Scheduling Concerns</span>
+        <textarea data-bind="notes.scheduling" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2" placeholder="e.g. client away 10/20-10/24; avoid school pickup 2:30-3:30">${esc(n.scheduling)}</textarea></label>
+      <label class="block text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Traffic Control</span>
+        <textarea data-bind="notes.trafficControl" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2" placeholder="e.g. flagger for bucket on street; lane closure permit; cones at driveway">${esc(n.trafficControl)}</textarea></label>
     </div>
   </div>`;
 }
@@ -1697,7 +1699,8 @@ async function buildMainPdfDoc(){
   h2('Crew / Internal Notes');
   p('Crew Notes: '+(state.notes.crew||'-'));
   p('Internal Notes: '+(state.notes.internal||'-'));
-  p('Scheduling / Traffic Control: '+(state.notes.scheduling||'-'));
+  p('Scheduling Concerns: '+(state.notes.scheduling||'-'));
+  p('Traffic Control: '+(state.notes.trafficControl||'-'));
   p('Client Notes: '+(state.notes.client||'-'));
   y+=6;
 
@@ -1833,7 +1836,8 @@ function notecardSections(){
   add('Crew Details', [c.crewSize]);
   add('Work Plan / Mobilization', [state.workPlan]);
   add('Access & Permits', [selectedAccessPermits().join(', ')]);
-  add('Traffic Control / Scheduling', [state.notes.scheduling]);
+  add('Scheduling Concerns', [state.notes.scheduling]);
+  add('Traffic Control', [state.notes.trafficControl]);
   add('Safety Notes', [state.safety]);
   return out;
 }
