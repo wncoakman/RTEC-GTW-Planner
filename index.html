@@ -1518,11 +1518,6 @@ async function buildMainPdfDoc(){
   const margin = 44; let y = margin; const lineH = 15;
 
   function ensure(h){ if(y+h > pageH-margin){ doc.addPage(); y = margin; } }
-  function band(text, bg){
-    doc.setFillColor(bg); doc.rect(0, y-20, pageW, 34, 'F');
-    doc.setTextColor('#FFFFFF'); doc.setFont('helvetica','bold'); doc.setFontSize(14);
-    doc.text(text, margin, y); y += 26; doc.setTextColor('#111111');
-  }
   function h2(text){ ensure(24); doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor('#1A73E8'); doc.text(text, margin, y); y+=18; doc.setTextColor('#111111'); }
   function p(text, size=10, bold=false, indent=0){
     doc.setFont('helvetica', bold?'bold':'normal'); doc.setFontSize(size);
@@ -1545,33 +1540,32 @@ async function buildMainPdfDoc(){
   const bannerH = drawTitleBanner(doc, pageW, margin, 17, 11, 1.25, 14);
   y = bannerH + 28;
 
-  /* ===== PART 1: CLIENT PROPOSAL SCOPE ===== */
-  band('CLIENT PROPOSAL SCOPE', '#1A73E8');
+  /* One proposal-ready report: everything needed to build the SingleOps proposal, in the order it
+     is entered there. No crew work order, running totals or GPS listing (those live on the notecard
+     and in the GeoJSON/CSV). */
   h2('Client & Site Information');
   p('SingleOps #: '+(state.client.leadNum||'-'));
   p('Client: '+(state.client.name||'-'));
   p('City: '+(state.client.city||'').toUpperCase());
   p('Phone: '+(state.client.phone||'-')+'   Email: '+(state.client.email||'-'));
-  p('Date: '+(state.client.date||'-')+'   Arborist: '+(state.client.arborist||'-'));
+  p('Date: '+(state.client.date||'-')+'   Arborist/ Sales Rep: '+(state.client.arborist||'-'));
   y += 6;
 
-  let running = 0;
-  h2('Tree-by-Tree Scope');
+  h2('Trees & Work Tasks');
   state.trees.forEach((tree,ti)=>{
     const label = treeLabel(ti);
     ensure(20);
     p(`${label}: ${tree.species||'Unspecified species'}  (DBH: ${tree.dbh||'-'}")`, 11, true);
     indentCur = 10;
     p('Location: '+(tree.location||'-'), 9.5, false, 10);
-    if(tree.gps.lat||tree.gps.lng) p(`GPS: ${tree.gps.lat}, ${tree.gps.lng} (±${tree.gps.accuracy||'?'}m)`, 9.5, false, 10);
-    if(Number(tree.price)){ running += Number(tree.price); p(`Tree Price: ${money(tree.price)}   Running Total: ${money(running)}`, 9.5, true, 10); }
+    if(Number(tree.price)) p(`Tree Price: ${money(tree.price)}`, 9.5, true, 10);
     if(tree.mainPhoto && (tree.mainPhoto.editedDataUrl||tree.mainPhoto.originalDataUrl)){ indentCur=10; addPhoto(tree.mainPhoto.editedDataUrl||tree.mainPhoto.originalDataUrl, label, 200); }
     tree.tasks.forEach((task,tj)=>{
       const tlabel = taskLabel(ti,tj);
       const tag = task.splitJob ? '  [SPLIT JOB]' : '';
       p(`• (${tlabel}) ${taskTypeLabel(task)}${tag}`, 9.5, !!task.splitJob, 10);
       if(task.details) p(task.details, 9, false, 16);
-      if(Number(task.price)){ running += Number(task.price); p(`Task Price: ${money(task.price)}   Running Total: ${money(running)}`, 9, true, 16); }
+      p(`Est. ${task.hours||'-'} hrs   Price: ${money(task.price)}`, 9, true, 16);
       if(task.photo && (task.photo.editedDataUrl||task.photo.originalDataUrl)){ indentCur=16; addPhoto(task.photo.editedDataUrl||task.photo.originalDataUrl, tlabel, 160); }
     });
     indentCur = 0; y += 4;
@@ -1583,44 +1577,10 @@ async function buildMainPdfDoc(){
   if(eq.spyderLift.needed && Number(eq.spyderLift.price)) eqPriced.push(['Spyder Lift', Number(eq.spyderLift.price)]);
   if(eqPriced.length){
     h2('Additional Priced Equipment');
-    eqPriced.forEach(([label,price])=>{ running+=price; p(`${label}: ${money(price)}   Running Total: ${money(running)}`, 9.5); });
-  }
-
-  ensure(30);
-  doc.setDrawColor('#1A73E8'); doc.line(margin, y, pageW-margin, y); y+=18;
-  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor('#1A73E8');
-  doc.text('GRAND TOTAL: '+money(running), margin, y); doc.setTextColor('#111111'); y+=24;
-
-  /* ===== PART 2: CREW WORK ORDER ===== */
-  doc.addPage(); y = margin;
-  band('CREW WORK ORDER', '#334155');
-  h2('Tree & Task Detail (hours, no pricing)');
-  state.trees.forEach((tree,ti)=>{
-    ensure(16);
-    p(`${treeLabel(ti)}: ${tree.species||'Unspecified'} - ${tree.location||'-'}`, 10.5, true);
-    tree.tasks.forEach((task,tj)=>{
-      const tlabel = taskLabel(ti,tj);
-      const tag = task.splitJob ? '  [SPLIT JOB]' : '';
-      p(`• (${tlabel}) ${taskTypeLabel(task)} — Est. ${task.hours||'-'} hrs${tag}`, 9.5, false, 10);
-    });
-  });
-  y += 6;
-
-  h2('Site Map & GPS Reference');
-  state.trees.forEach((tree,ti)=>{
-    const acc = tree.gps.accuracy ? `  (±${Math.round(Number(tree.gps.accuracy))}m)` : '';
-    p(`${treeLabel(ti)} (map pin ${ti+1}): ${tree.species||'Unspecified'}: ${tree.gps.lat||'-'}, ${tree.gps.lng||'-'}${acc}`, 9.5, false, 10);
-  });
-  if(geoPoints().length){
-    const mapCanvas = renderSiteMapCanvas(900, 660);
-    const mapW = pageW-margin*2, mapH = mapW*660/900;
-    ensure(mapH+24);
-    doc.setDrawColor('#CFE0FB'); doc.rect(margin, y, mapW, mapH);
-    doc.addImage(mapCanvas.toDataURL('image/jpeg', 0.9), 'JPEG', margin, y, mapW, mapH);
-    y += mapH+12;
-    p('Positions are relative to one another (derived from captured GPS), not a surveyed map.', 8);
+    eqPriced.forEach(([label,price])=>p(`${label}: ${money(price)}`, 9.5));
   }
   y += 6;
+
   h2('Required Equipment');
   if(eq.bucketTruck!=='None') p('Bucket Truck: '+eq.bucketTruck);
   if(eq.chipper!=='None') p('Chipper: '+eq.chipper);
