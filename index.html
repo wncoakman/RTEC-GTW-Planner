@@ -121,8 +121,18 @@ const ACCESS_ITEMS = [
   ['pepco','Pepco'],
   ['parkingPermits','Parking Permits'],
   ['missUtility','Miss Utility'],
-  ['ddotRemoval','DDOT Removal Permit']
+  ['ddotRemoval','DDOT Removal Permit'],
+  ['trafficControl','Traffic Control']
 ];
+const ACCESS_HINTS = {
+  neighborPermission: 'Which neighbor, what access, written permission received?',
+  dominion: 'Line/clearance issue, ticket #, outage or drop needed?',
+  pepco: 'Wire drop, shut-off, or clearance? Ticket #, scheduled date?',
+  parkingPermits: 'Where, how many spaces, dates, who applies?',
+  missUtility: 'Ticket #, date called in, marks expected?',
+  ddotRemoval: 'Permit #, status, conditions?',
+  trafficControl: 'Flaggers, cones/signs, lane or sidewalk closure, hours allowed'
+};
 const SPECIES_OPTIONS = [
   'Red Oak','White Oak','Bur Oak','Pin Oak','Sugar Maple','Red Maple','Silver Maple',
   'Norway Maple','Japanese Maple','River Birch','American Elm','Honeylocust',
@@ -154,8 +164,8 @@ function newState(){
     },
     workPlan: '',
     safety: '',
-    accessPermits: { standard:{ neighborPermission:false,dominion:false,pepco:false,parkingPermits:false,missUtility:false,ddotRemoval:false }, custom:[] },
-    notes: { crew:'', client:'', internal:'', scheduling:'', trafficControl:'' }
+    accessPermits: { standard:{ neighborPermission:false,dominion:false,pepco:false,parkingPermits:false,missUtility:false,ddotRemoval:false,trafficControl:false }, details:{}, custom:[] },
+    notes: { crew:'', client:'', internal:'', scheduling:'' }
   };
 }
 let state = newState();
@@ -209,8 +219,18 @@ function normalizeState(s){
   out.equipment = Object.assign(newState().equipment, s.equipment);
   out.equipment.crane = Object.assign({needed:false,spec:'',price:''}, out.equipment.crane);
   out.equipment.spyderLift = { needed: !!(out.equipment.spyderLift && out.equipment.spyderLift.needed), price: (out.equipment.spyderLift && out.equipment.spyderLift.price) || '' };
-  out.accessPermits = { standard: Object.assign(newState().accessPermits.standard, s.accessPermits && s.accessPermits.standard), custom: (s.accessPermits && s.accessPermits.custom) || [] };
+  out.accessPermits = {
+    standard: Object.assign(newState().accessPermits.standard, s.accessPermits && s.accessPermits.standard),
+    details: Object.assign({}, s.accessPermits && s.accessPermits.details),
+    custom: ((s.accessPermits && s.accessPermits.custom) || []).map(c=>Object.assign({label:'', checked:false, details:''}, c))
+  };
   out.notes = Object.assign(newState().notes, s.notes);
+  // Traffic control moved from a free-text note into the Access & Permits checklist.
+  if(String(out.notes.trafficControl||'').trim()){
+    out.accessPermits.standard.trafficControl = true;
+    if(!out.accessPermits.details.trafficControl) out.accessPermits.details.trafficControl = out.notes.trafficControl;
+  }
+  delete out.notes.trafficControl;
   out.trees = (Array.isArray(s.trees) && s.trees.length ? s.trees : [newTree()]).map(t=>{
     const tree = Object.assign(newTree(), t);
     tree.gps = Object.assign({lat:'',lng:'',accuracy:''}, t.gps);
@@ -667,6 +687,21 @@ function renderTaskCard(tree, ti, task, tj){
   </div>`;
 }
 
+/* Access & Permits: each checked item gets a collapsible details box. Open/closed state is per
+   session; "s:<key>" for standard items, "c:<index>" for custom ones. */
+const accessOpen = new Set();
+function accessDetailsToggle(key, details){
+  const open = accessOpen.has(key), has = String(details||'').trim();
+  return `<button type="button" data-access-details="${key}" aria-expanded="${open}"
+    class="shrink-0 text-xs font-medium ${has ? 'text-brand-dark bg-brand-light' : 'text-brand'} rounded-full px-2.5 py-1 flex items-center gap-1">
+    ${has ? 'Details ✓' : 'Add details'}
+    <svg class="w-3 h-3 transition-transform ${open?'rotate-180':''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button>`;
+}
+function accessDetailsBox(path, details, hint){
+  return `<textarea data-bind="${path}" rows="2" placeholder="${esc(hint||'Details')}"
+    class="mt-1 mb-1.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">${esc(details||'')}</textarea>`;
+}
+
 /* ===================== Step 2: Global Work Plan & Logistics ===================== */
 function renderStepLogistics(){
   const eq = state.equipment, ap = state.accessPermits, n = state.notes;
@@ -738,13 +773,23 @@ function renderStepLogistics(){
       <h2 class="text-sm font-bold text-slate-700">Access & Permits</h2>
       <div class="space-y-1.5 text-sm">
         ${ACCESS_ITEMS.map(([k,label])=>`
-          <label class="flex items-center gap-2"><input type="checkbox" data-bind="accessPermits.standard.${k}" ${ap.standard[k]?'checked':''}> ${esc(label)}</label>
+          <div>
+            <div class="flex items-center gap-2">
+              <label class="flex-1 flex items-center gap-2 py-0.5"><input type="checkbox" data-bind="accessPermits.standard.${k}" ${ap.standard[k]?'checked':''}> ${esc(label)}</label>
+              ${ap.standard[k] ? accessDetailsToggle('s:'+k, ap.details[k]) : ''}
+            </div>
+            ${ap.standard[k] && accessOpen.has('s:'+k) ? accessDetailsBox(`accessPermits.details.${k}`, ap.details[k], ACCESS_HINTS[k]) : ''}
+          </div>
         `).join('')}
         ${ap.custom.map((c,ci)=>`
-          <div class="flex items-center gap-2">
-            <input type="checkbox" data-custom-access-check="${ci}" ${c.checked?'checked':''}>
-            <input data-custom-access-label="${ci}" value="${esc(c.label)}" placeholder="Custom item" class="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm">
-            <button class="text-xs text-red-600" data-remove-custom-access="${ci}">✕</button>
+          <div>
+            <div class="flex items-center gap-2">
+              <input type="checkbox" data-custom-access-check="${ci}" ${c.checked?'checked':''}>
+              <input data-custom-access-label="${ci}" value="${esc(c.label)}" placeholder="Custom item" class="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-1.5 text-sm">
+              ${c.checked ? accessDetailsToggle('c:'+ci, c.details) : ''}
+              <button class="text-xs text-red-600 px-1" data-remove-custom-access="${ci}" aria-label="Remove item">✕</button>
+            </div>
+            ${c.checked && accessOpen.has('c:'+ci) ? accessDetailsBox(`accessPermits.custom.${ci}.details`, c.details, 'Details') : ''}
           </div>
         `).join('')}
       </div>
@@ -761,8 +806,6 @@ function renderStepLogistics(){
         <textarea data-bind="notes.internal" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2">${esc(n.internal)}</textarea></label>
       <label class="block text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Scheduling Concerns</span>
         <textarea data-bind="notes.scheduling" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2" placeholder="e.g. client away 10/20-10/24; avoid school pickup 2:30-3:30">${esc(n.scheduling)}</textarea></label>
-      <label class="block text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Traffic Control</span>
-        <textarea data-bind="notes.trafficControl" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2" placeholder="e.g. flagger for bucket on street; lane closure permit; cones at driveway">${esc(n.trafficControl)}</textarea></label>
     </div>
   </div>`;
 }
@@ -803,6 +846,11 @@ function handleBind(e){
     if(el) el.textContent = money(treeSubtotal(state.trees[ti]));
   }
   if(e.target.type==='checkbox' && (path.startsWith('equipment.crane.needed')||path.startsWith('equipment.spyderLift.needed'))){
+    renderStepLogistics();
+  }
+  const apMatch = e.type==='change' && path.match(/^accessPermits\.standard\.(\w+)$/);
+  if(apMatch){
+    if(val) accessOpen.add('s:'+apMatch[1]); else accessOpen.delete('s:'+apMatch[1]);
     renderStepLogistics();
   }
   if(path.includes('.type') && e.target.tagName==='SELECT'){
@@ -884,9 +932,25 @@ appRoot.addEventListener('click', async e=>{
   const photoEdit = e.target.closest('[data-photo-edit]');
   if(photoEdit){ openEditorFromEl(photoEdit); return; }
 
-  if(e.target.id==='addCustomAccessBtn'){ state.accessPermits.custom.push({label:'', checked:false}); renderStepLogistics(); persist(); return; }
+  if(e.target.id==='addCustomAccessBtn'){ state.accessPermits.custom.push({label:'', checked:false, details:''}); renderStepLogistics(); persist(); return; }
+  const apToggle = e.target.closest('[data-access-details]');
+  if(apToggle){
+    const key = apToggle.dataset.accessDetails;
+    if(accessOpen.has(key)) accessOpen.delete(key); else accessOpen.add(key);
+    renderStepLogistics();
+    if(accessOpen.has(key)){
+      const t = appRoot.querySelector(`[data-access-details="${key}"]`);
+      const box = t && t.parentElement.parentElement.querySelector('textarea');
+      if(box) box.focus();
+    }
+    return;
+  }
   const rmCustom = e.target.closest('[data-remove-custom-access]');
-  if(rmCustom){ state.accessPermits.custom.splice(Number(rmCustom.dataset.removeCustomAccess),1); renderStepLogistics(); persist(); return; }
+  if(rmCustom){
+    state.accessPermits.custom.splice(Number(rmCustom.dataset.removeCustomAccess),1);
+    [...accessOpen].forEach(k=>{ if(k.startsWith('c:')) accessOpen.delete(k); }); // indexes shifted
+    renderStepLogistics(); persist(); return;
+  }
 
   if(e.target.id==='genZipBtn'){ await generateAndDownloadZip(e.target); return; }
   if(e.target.id==='genPdfBtn'){ await downloadMainPdfOnly(e.target); return; }
@@ -924,7 +988,12 @@ appRoot.addEventListener('change', async e=>{
   const customLabel = e.target.closest('[data-custom-access-label]');
   if(customLabel){ state.accessPermits.custom[Number(customLabel.dataset.customAccessLabel)].label = customLabel.value; persist(); return; }
   const customCheck = e.target.closest('[data-custom-access-check]');
-  if(customCheck){ state.accessPermits.custom[Number(customCheck.dataset.customAccessCheck)].checked = customCheck.checked; persist(); return; }
+  if(customCheck){
+    const ci = Number(customCheck.dataset.customAccessCheck);
+    state.accessPermits.custom[ci].checked = customCheck.checked;
+    if(customCheck.checked) accessOpen.add('c:'+ci); else accessOpen.delete('c:'+ci);
+    persist(); renderStepLogistics(); return;
+  }
 });
 
 /* ===================== Photo Doodle Editor =====================
@@ -1535,12 +1604,14 @@ function selectedEquipment(){
   if(eq.spyderLift.needed) out.push(['Spyder Lift', '']);
   return out;
 }
-/* Checked access & permit items, standard ones first. */
-function selectedAccessPermits(){
-  const out = ACCESS_ITEMS.filter(([k])=>state.accessPermits.standard[k]).map(([,l])=>l);
-  state.accessPermits.custom.forEach(c=>{ if(c.checked && String(c.label||'').trim()) out.push(c.label.trim()); });
+/* Checked access & permit items as {label, details}, standard ones first. */
+function selectedAccessPermitItems(){
+  const ap = state.accessPermits;
+  const out = ACCESS_ITEMS.filter(([k])=>ap.standard[k]).map(([k,l])=>({ label:l, details:String(ap.details[k]||'').trim() }));
+  ap.custom.forEach(c=>{ if(c.checked && String(c.label||'').trim()) out.push({ label:c.label.trim(), details:String(c.details||'').trim() }); });
   return out;
 }
+function selectedAccessPermits(){ return selectedAccessPermitItems().map(i=>i.label); }
 /* Tags for the SingleOps proposal: equipment, access & permits, and crew size. */
 function jobTags(){
   const tags = selectedEquipment().map(([n,d])=>d ? `${n} ${d}` : n);
@@ -1691,16 +1762,15 @@ async function buildMainPdfDoc(){
   y+=6;
 
   h2('Access & Permits');
-  const apList = selectedAccessPermits();
+  const apList = selectedAccessPermitItems();
   if(!apList.length) p('None selected.');
-  apList.forEach(a=>p('• '+a));
+  apList.forEach(a=>{ p('• '+a.label, 10, true); if(a.details) p(a.details, 9.5, false, 10); });
   y+=6;
 
   h2('Crew / Internal Notes');
   p('Crew Notes: '+(state.notes.crew||'-'));
   p('Internal Notes: '+(state.notes.internal||'-'));
   p('Scheduling Concerns: '+(state.notes.scheduling||'-'));
-  p('Traffic Control: '+(state.notes.trafficControl||'-'));
   p('Client Notes: '+(state.notes.client||'-'));
   y+=6;
 
@@ -1835,9 +1905,8 @@ function notecardSections(){
   add('Equipment', [selectedEquipment().map(([n,d])=>d ? `${n} ${d}` : n).join(', ')]);
   add('Crew Details', [c.crewSize]);
   add('Work Plan / Mobilization', [state.workPlan]);
-  add('Access & Permits', [selectedAccessPermits().join(', ')]);
+  add('Access & Permits', selectedAccessPermitItems().map(a=>a.details ? `• ${a.label}: ${a.details}` : `• ${a.label}`));
   add('Scheduling Concerns', [state.notes.scheduling]);
-  add('Traffic Control', [state.notes.trafficControl]);
   add('Safety Notes', [state.safety]);
   return out;
 }
