@@ -1462,6 +1462,35 @@ function treeLabel(ti){ const lead = String(state.client.leadNum||'').trim(); re
 function taskLabel(ti, tj){ const lead = String(state.client.leadNum||'').trim(); return (lead ? `${lead}-` : '') + (ti+1) + taskLetter(tj); }
 function photoSrc(photo){ return photo ? (photo.editedDataUrl || photo.originalDataUrl || null) : null; }
 
+/* Selected equipment as [name, detail] pairs, in the order shown in the app. */
+function selectedEquipment(){
+  const eq = state.equipment, out = [];
+  if(eq.bucketTruck!=='None') out.push(['Bucket Truck', eq.bucketTruck]);
+  if(eq.chipper!=='None') out.push(['Chipper', eq.chipper]);
+  if(eq.chipTruck!=='None') out.push(['Chip Truck', eq.chipTruck]);
+  if(eq.extraChipTruck!=='No') out.push(['Extra Chip Truck', eq.extraChipTruck.replace(/^Yes - /,'')]);
+  if(eq.stumpGrinder!=='None') out.push(['Stump Grinder', eq.stumpGrinder]);
+  if(eq.miniLoader!=='None') out.push(['Mini Loader', eq.miniLoader]);
+  if(eq.shuttleVehicle==='Yes') out.push(['Shuttle Vehicle', '']);
+  if(eq.crane.needed) out.push(['Crane', eq.crane.spec||'']);
+  if(eq.spyderLift.needed) out.push(['Spyder Lift', '']);
+  return out;
+}
+/* Checked access & permit items, standard ones first. */
+function selectedAccessPermits(){
+  const out = ACCESS_ITEMS.filter(([k])=>state.accessPermits.standard[k]).map(([,l])=>l);
+  state.accessPermits.custom.forEach(c=>{ if(c.checked && String(c.label||'').trim()) out.push(c.label.trim()); });
+  return out;
+}
+/* Tags for the SingleOps proposal: equipment, access & permits, and crew size. */
+function jobTags(){
+  const tags = selectedEquipment().map(([n,d])=>d ? `${n} ${d}` : n);
+  selectedAccessPermits().forEach(a=>tags.push(a));
+  const crew = String(state.client.crewSize||'').trim();
+  if(crew) tags.push('Crew: '+crew);
+  return tags;
+}
+
 /* Work type for the title, summarised from the job's tasks in the order they first appear. */
 const WORK_TYPE_GROUPS = [
   [/^Prune/, 'Pruning'], [/^Removal - Full/, 'Take Down'], [/^Removal/, 'Hazard Limb Removal'],
@@ -1589,15 +1618,9 @@ async function buildMainPdfDoc(){
   y += 6;
 
   h2('Required Equipment');
-  if(eq.bucketTruck!=='None') p('Bucket Truck: '+eq.bucketTruck);
-  if(eq.chipper!=='None') p('Chipper: '+eq.chipper);
-  if(eq.chipTruck!=='None') p('Chip Truck: '+eq.chipTruck);
-  if(eq.extraChipTruck!=='No') p('Extra Chip Truck: '+eq.extraChipTruck);
-  if(eq.crane.needed) p('Crane: '+(eq.crane.spec||'Yes'));
-  if(eq.stumpGrinder!=='None') p('Stump Grinder: '+eq.stumpGrinder);
-  if(eq.miniLoader!=='None') p('Mini Loader: '+eq.miniLoader);
-  if(eq.shuttleVehicle==='Yes') p('Shuttle Vehicle: Yes');
-  if(eq.spyderLift.needed) p('Spyder Lift: Yes');
+  const eqList = selectedEquipment();
+  if(!eqList.length) p('None selected.');
+  eqList.forEach(([n,d])=>p(d ? `${n}: ${d}` : n));
   p('Crew Details: '+(state.client.crewSize||'-'));
   y+=6;
 
@@ -1610,8 +1633,9 @@ async function buildMainPdfDoc(){
   y+=6;
 
   h2('Access & Permits');
-  ACCESS_ITEMS.forEach(([k,label])=>{ p(`[${state.accessPermits.standard[k]?'X':' '}] ${label}`); });
-  state.accessPermits.custom.forEach(c=>{ if(c.label) p(`[${c.checked?'X':' '}] ${c.label}`); });
+  const apList = selectedAccessPermits();
+  if(!apList.length) p('None selected.');
+  apList.forEach(a=>p('• '+a));
   y+=6;
 
   h2('Crew / Internal Notes');
@@ -1619,6 +1643,29 @@ async function buildMainPdfDoc(){
   p('Internal Notes: '+(state.notes.internal||'-'));
   p('Scheduling / Traffic Control: '+(state.notes.scheduling||'-'));
   p('Client Notes: '+(state.notes.client||'-'));
+  y+=6;
+
+  /* Tags: repeats the selections above as chips, ready to add as SingleOps tags. */
+  h2('Tags');
+  const tags = jobTags();
+  if(!tags.length) p('None.');
+  else{
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+    const chipH = 18, padX = 7, gapX = 6, gapY = 6;
+    let x = margin; y -= 4;
+    ensure(chipH);
+    tags.forEach(tag=>{
+      const text = doc.splitTextToSize(tag, pageW - margin*2 - padX*2)[0];
+      const w = doc.getTextWidth(text) + padX*2;
+      if(x + w > pageW - margin){ x = margin; y += chipH + gapY; }
+      if(y + chipH > pageH - margin){ doc.addPage(); y = margin; x = margin; }
+      doc.setFillColor('#E8F0FE'); doc.setDrawColor('#AECBFA');
+      doc.roundedRect(x, y, w, chipH, 4, 4, 'FD');
+      doc.setTextColor('#0E5BC4'); doc.text(text, x + padX, y + 12.5);
+      x += w + gapX;
+    });
+    doc.setTextColor('#111111'); y += chipH + 10;
+  }
 
   drawPhotoPages(doc, pageW, pageH, margin);
   return doc;
