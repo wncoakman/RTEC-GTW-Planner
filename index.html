@@ -825,7 +825,7 @@ function renderStepGenerate(){
       <button id="genPdfBtn" class="bg-slate-100 text-slate-700 text-sm font-medium rounded-lg py-2.5">PDF Report only</button>
       <button id="genCardBtn" class="bg-slate-100 text-slate-700 text-sm font-medium rounded-lg py-2.5">Notecard PDF only</button>
     </div>
-    <p class="text-xs text-slate-400 pt-2">ZIP includes: main report PDF, 5x7 notecard PDF, GeoJSON + CSV coordinates, and a media folder of original + annotated photos.</p>
+    <p class="text-xs text-slate-400 pt-2">ZIP includes: main report PDF, 5x7 notecard PDF, site map image, GeoJSON + CSV coordinates, and a media folder of original + annotated photos. The satellite map needs an internet connection when you generate; offline it uses a drawn diagram.</p>
   </div>`;
 }
 
@@ -1579,6 +1579,112 @@ function renderSiteMapCanvas(width = 600, height = 440) {
   return canvas;
 }
 
+/* ===================== Satellite site map =====================
+   Esri World Imagery tiles (no account or key needed), stitched onto a canvas around the trees' GPS
+   points, with the same numbered pins as the diagram. Needs a connection when the report is
+   generated; if the tiles can't be loaded the report falls back to the drawn diagram. */
+const SAT_TILE_URL = (z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+const SAT_ATTRIBUTION = 'Imagery: Esri, Maxar, Earthstar Geographics, and the GIS User Community';
+const SAT_MAX_ZOOM = 19, SAT_MIN_ZOOM = 15;
+
+function mercatorPx(lat, lng, z){
+  const scale = 256 * Math.pow(2, z);
+  const s = Math.sin(Math.max(-85, Math.min(85, lat)) * Math.PI / 180);
+  return { x: (lng + 180) / 360 * scale, y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * scale };
+}
+function loadTile(url, timeoutMs){
+  return new Promise(resolve=>{
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    const t = setTimeout(()=>{ img.src = ''; resolve(null); }, timeoutMs);
+    img.onload = ()=>{ clearTimeout(t); resolve(img); };
+    img.onerror = ()=>{ clearTimeout(t); resolve(null); };
+    img.src = url;
+  });
+}
+/* Text with a dark outline so it reads on any imagery. */
+function haloText(ctx, text, x, y){
+  ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = Math.max(3, parseInt(ctx.font) / 3.2);
+  ctx.strokeText(text, x, y); ctx.fillStyle = '#ffffff'; ctx.fillText(text, x, y);
+}
+/* Returns a canvas, or null when there are no GPS points or the imagery can't be fetched. */
+async function renderSatelliteMap(width = 1280, height = 640){
+  const pts = geoPoints();
+  if(!pts.length || !navigator.onLine) return null;
+  // Highest zoom at which every pin fits with room for its label.
+  const padX = 90, padTop = 60, padBottom = 90;
+  let z = SAT_MAX_ZOOM, px;
+  for(; z >= SAT_MIN_ZOOM; z--){
+    px = pts.map(p=>mercatorPx(p.lat, p.lng, z));
+    const w = Math.max(...px.map(p=>p.x)) - Math.min(...px.map(p=>p.x));
+    const h = Math.max(...px.map(p=>p.y)) - Math.min(...px.map(p=>p.y));
+    if(w <= width - padX*2 && h <= height - padTop - padBottom) break;
+  }
+  z = Math.max(z, SAT_MIN_ZOOM);
+  px = pts.map(p=>mercatorPx(p.lat, p.lng, z));
+  const cx = (Math.max(...px.map(p=>p.x)) + Math.min(...px.map(p=>p.x))) / 2;
+  const cy = (Math.max(...px.map(p=>p.y)) + Math.min(...px.map(p=>p.y))) / 2 + (padBottom - padTop) / 2;
+  const left = cx - width / 2, top = cy - height / 2;
+
+  const tiles = [];
+  for(let tx = Math.floor(left / 256); tx <= Math.floor((left + width) / 256); tx++)
+    for(let ty = Math.floor(top / 256); ty <= Math.floor((top + height) / 256); ty++) tiles.push([tx, ty]);
+  const imgs = await Promise.all(tiles.map(([tx,ty])=>loadTile(SAT_TILE_URL(z, tx, ty), 10000)));
+  if(imgs.filter(Boolean).length < tiles.length * 0.75) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#333'; ctx.fillRect(0, 0, width, height);
+  tiles.forEach(([tx,ty], i)=>{ if(imgs[i]) ctx.drawImage(imgs[i], tx*256 - left, ty*256 - top); });
+  try{ canvas.toDataURL('image/jpeg', 0.1); }catch(e){ return null; } // tainted canvas: CORS was refused
+
+  const k = width / 600;
+  pts.forEach((p, n)=>{
+    const x = px[n].x - left, y = px[n].y - top;
+    ctx.beginPath(); ctx.arc(x, y, 11 * k, 0, Math.PI * 2);
+    ctx.fillStyle = '#1A73E8'; ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5 * k / 2; ctx.stroke();
+    ctx.fillStyle = '#ffffff'; ctx.font = `bold ${Math.round(11 * k)}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(p.i + 1), x, y + 1);
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = `bold ${Math.round(10.5 * k)}px sans-serif`;
+    haloText(ctx, treeLabel(p.i), x, y + 25 * k);
+    if(p.t.species){ ctx.font = `${Math.round(9.5 * k)}px sans-serif`; haloText(ctx, p.t.species.slice(0, 24), x, y + 37 * k); }
+  });
+
+  // Scale bar (ground resolution at this latitude and zoom) and north arrow.
+  const lat0 = pts.reduce((s,p)=>s + p.lat, 0) / pts.length;
+  const mPerPx = 156543.03392 * Math.cos(lat0 * Math.PI / 180) / Math.pow(2, z);
+  const barM = niceRoundScale(width * mPerPx / 6), barPx = barM / mPerPx;
+  const bx = 16 * k, by = height - 14 * k;
+  ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(bx - 6 * k, by - 20 * k, barPx + 12 * k, 26 * k);
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 2 * k / 2;
+  ctx.beginPath(); ctx.moveTo(bx, by - 4 * k); ctx.lineTo(bx, by); ctx.lineTo(bx + barPx, by); ctx.lineTo(bx + barPx, by - 4 * k); ctx.stroke();
+  ctx.fillStyle = '#111'; ctx.font = `${Math.round(9 * k)}px sans-serif`; ctx.textAlign = 'left';
+  ctx.fillText(`${barM} m (${Math.round(barM * 3.28084)} ft)`, bx, by - 7 * k);
+  ctx.save(); ctx.translate(width - 22 * k, 30 * k);
+  ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.beginPath(); ctx.arc(0, 0, 15 * k, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#111'; ctx.beginPath(); ctx.moveTo(0, -11 * k); ctx.lineTo(-5 * k, 3 * k); ctx.lineTo(5 * k, 3 * k); ctx.closePath(); ctx.fill();
+  ctx.font = `bold ${Math.round(8 * k)}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText('N', 0, 11 * k);
+  ctx.restore();
+  // Attribution, required by Esri's terms.
+  ctx.font = `${Math.round(7.5 * k)}px sans-serif`;
+  const aw = ctx.measureText(SAT_ATTRIBUTION).width;
+  ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillRect(width - aw - 10 * k, height - 13 * k, aw + 10 * k, 13 * k);
+  ctx.fillStyle = '#333'; ctx.textAlign = 'right'; ctx.fillText(SAT_ATTRIBUTION, width - 5 * k, height - 3.5 * k);
+  return canvas;
+}
+/* The site map for the report and ZIP: satellite when possible, otherwise the drawn diagram. */
+async function siteMapImage(){
+  if(!geoPoints().length) return null;
+  let sat = null;
+  try{ sat = await renderSatelliteMap(1280, 640); }catch(e){ console.warn('Satellite map failed', e); }
+  if(sat) return { dataUrl: sat.toDataURL('image/jpeg', 0.88), satellite: true, aspect: 0.5 };
+  return { dataUrl: renderSiteMapCanvas(1200, 600).toDataURL('image/jpeg', 0.9), satellite: false, aspect: 0.5 };
+}
+
 /* ===================== PDF generation ===================== */
 function taskTypeLabel(task){ return task.type==='Other (specify)' ? (task.customType||'Other') : task.type; }
 
@@ -1796,13 +1902,13 @@ async function buildMainPdfDoc(){
     doc.setTextColor('#111111'); y += chipH + 10;
   }
 
-  drawPhotoPages(doc, pageW, pageH, margin);
+  await drawPhotoPages(doc, pageW, pageH, margin);
   return doc;
 }
 
 /* Photo pages at the end of the report. Tree photos come first, with the site map, for building the
    SingleOps inventory map; task photos follow. Two per row, each labelled with its SingleOps ID. */
-function drawPhotoPages(doc, pageW, pageH, margin){
+async function drawPhotoPages(doc, pageW, pageH, margin){
   const treePhotos = [], taskPhotos = [];
   state.trees.forEach((tree,ti)=>{
     if(photoSrc(tree.mainPhoto)) treePhotos.push({ src: photoSrc(tree.mainPhoto), label: treeLabel(ti), sub: `Tree #${ti+1}: ${tree.species||'Unspecified species'}` });
@@ -1858,13 +1964,15 @@ function drawPhotoPages(doc, pageW, pageH, margin){
       doc.setTextColor('#111111'); y += boxH + 20;
     }
     if(hasMap){
-      const mapW = pageW - margin*2, mapH = mapW*0.5;
-      const mapCanvas = renderSiteMapCanvas(1200, 600);
+      const map = await siteMapImage();
+      const mapW = pageW - margin*2, mapH = mapW*map.aspect;
       doc.setDrawColor('#CFE0FB'); doc.rect(margin, y, mapW, mapH);
-      doc.addImage(mapCanvas.toDataURL('image/jpeg', 0.9), 'JPEG', margin, y, mapW, mapH);
+      doc.addImage(map.dataUrl, 'JPEG', margin, y, mapW, mapH);
       y += mapH + 12;
       doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor('#64748B');
-      doc.text('Pin positions come from captured GPS and are relative to one another, not a surveyed map.', margin, y);
+      doc.text(map.satellite
+        ? 'Pins are placed from phone GPS, which is often off by 3-10 m. Check each pin against the photos.'
+        : 'Satellite image unavailable (no connection when this was generated). Pin positions are relative to one another.', margin, y);
       if(unmapped.length){
         y += 11; doc.setTextColor('#9A3412');
         doc.splitTextToSize('Not on the map (no GPS): '+unmapped.join(', '), pageW - margin*2).forEach((l,i)=>{ doc.text(l, margin, y + i*11); if(i) y += 11; });
@@ -2021,6 +2129,8 @@ async function generateAndDownloadZip(btn){
     root.file(jobFileBase()+'_Notecard.pdf', cardDoc.output('blob'));
     root.file('tree_coordinates.geojson', JSON.stringify(buildGeoJSON(), null, 2));
     root.file('tree_coordinates.csv', buildCSV());
+    const map = await siteMapImage();
+    if(map) root.file(map.satellite ? 'site_map_satellite.jpg' : 'site_map.jpg', dataUrlToBlob(map.dataUrl));
     const media = root.folder('media');
     state.trees.forEach((tree,ti)=>{
       const label = safeFilePart(treeLabel(ti));

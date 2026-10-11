@@ -15,7 +15,7 @@
  * Bump CACHE_VERSION whenever any shipped file changes, so returning users
  * pick up the update on next launch instead of running stale cached code.
  */
-const CACHE_VERSION = 'rtec-gtw-builder-v6';
+const CACHE_VERSION = 'rtec-gtw-builder-v7';
 
 const SAME_ORIGIN_URLS = [
   './',
@@ -69,7 +69,11 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
-  const isSameOrigin = new URL(req.url).origin === self.location.origin;
+  const url = new URL(req.url);
+  // Satellite map tiles go straight to the network; caching them would fill the phone's storage.
+  if (url.hostname === 'server.arcgisonline.com') return;
+
+  const isSameOrigin = url.origin === self.location.origin;
 
   event.respondWith(
     caches.match(req).then((cached) => {
