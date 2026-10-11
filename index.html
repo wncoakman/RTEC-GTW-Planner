@@ -67,6 +67,37 @@
   </div>
 </footer>
 
+<!-- ===================== Satellite pin placement ===================== -->
+<div id="mapModal" class="fixed inset-0 z-50 bg-black hidden flex flex-col">
+  <div class="flex items-center justify-between px-3 py-2 bg-slate-900 text-white text-sm">
+    <button id="mapCancelBtn" class="px-3 py-1.5 rounded bg-slate-700">Cancel</button>
+    <span class="font-semibold" id="mapTitle">Place tree</span>
+    <button id="mapSaveBtn" class="px-3 py-1.5 rounded bg-brand font-semibold">Save</button>
+  </div>
+  <div class="relative flex-1 overflow-hidden" id="mapWrap">
+    <canvas id="mapCanvas" style="touch-action:none;display:block;background:#222"></canvas>
+    <svg class="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+      <g fill="none" stroke-linecap="round">
+        <g stroke="#000" stroke-opacity=".7" stroke-width="5"><circle cx="32" cy="32" r="13"/><path d="M32 2v18M32 44v18M2 32h18M44 32h18"/></g>
+        <g stroke="#FFD60A" stroke-width="2.5"><circle cx="32" cy="32" r="13"/><path d="M32 2v18M32 44v18M2 32h18M44 32h18"/></g>
+      </g>
+    </svg>
+    <div id="mapMsg" class="hidden absolute inset-x-3 top-3 bg-amber-50 text-amber-900 text-xs rounded-lg px-3 py-2 shadow"></div>
+    <div class="absolute right-3 bottom-8 flex flex-col gap-2">
+      <button id="mapZoomIn" class="w-10 h-10 rounded-lg bg-white/90 text-slate-800 text-xl font-bold shadow" aria-label="Zoom in">+</button>
+      <button id="mapZoomOut" class="w-10 h-10 rounded-lg bg-white/90 text-slate-800 text-xl font-bold shadow" aria-label="Zoom out">−</button>
+    </div>
+    <div class="pointer-events-none absolute left-0 bottom-0 bg-white/80 text-[10px] text-slate-700 px-1.5 py-0.5" id="mapAttribution"></div>
+  </div>
+  <div class="bg-slate-900 text-white px-3 pt-2 text-xs space-y-2" style="padding-bottom:max(0.5rem, env(safe-area-inset-bottom))">
+    <p class="text-white/80">Drag the map so the crosshair sits on the trunk. Pinch or scroll to zoom. The dashed ring is where GPS put it.</p>
+    <div class="flex items-center gap-2">
+      <span id="mapCoords" class="flex-1 font-mono text-white/70"></span>
+      <button id="mapResetBtn" class="px-2.5 py-1.5 rounded bg-slate-700">Back to GPS</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== Photo Doodle Editor Modal ===================== -->
 <div id="editorModal" class="fixed inset-0 z-50 bg-black hidden flex flex-col">
   <div class="flex items-center justify-between px-3 py-2 bg-slate-900 text-white text-sm">
@@ -469,7 +500,7 @@ const gpsManualOpen = new Set(); // tree.id
 function gpsSummary(tree){
   const g = tree.gps;
   if(!(g.lat && g.lng)) return 'Not captured';
-  const acc = g.accuracy ? `  ±${Math.round(Number(g.accuracy))} m` : '';
+  const acc = g.source==='map' ? '  · placed on satellite' : g.accuracy ? `  ±${Math.round(Number(g.accuracy))} m` : '';
   return esc(`${g.lat}, ${g.lng}${acc}`);
 }
 function focusManualGps(tree){
@@ -596,6 +627,7 @@ function onManualGpsChange(input){
     }
   }
   const field = m[2];
+  delete tree.gps.source;
   const val = parseCoord(input.value, field);
   if(val===null){ tree.gps[field] = ''; persist(); gpsStatus.delete(tree.id); renderStepTrees(); return; }
   if(isNaN(val)){
@@ -665,6 +697,7 @@ function renderStepTrees(){
           <div class="flex gap-2">
             <button class="flex-1 text-xs font-medium ${gpsBusy.has(tree.id)?'bg-slate-700':'bg-brand'} text-white rounded-lg py-2" data-gps-capture="${ti}">${gpsBusy.has(tree.id)?'■ Stop &amp; save':'📍 Capture GPS'}</button>
             ${(tree.gps.lat&&tree.gps.lng) ? `<a class="text-xs font-medium bg-slate-100 rounded-lg py-2 px-3 flex items-center" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${encodeURIComponent(tree.gps.lat)},${encodeURIComponent(tree.gps.lng)}">View on Map</a>` : ''}
+            ${geoPoints().length ? `<button class="text-xs font-medium bg-slate-100 rounded-lg py-2 px-3" data-gps-place="${ti}" title="Fine-tune the position on satellite imagery (needs a connection)">🛰 ${(tree.gps.lat&&tree.gps.lng) ? 'Fine-tune' : 'Place'}</button>` : ''}
           </div>
           ${gpsStatusHtml(tree)}
           <button class="mt-2 text-xs font-medium text-brand flex items-center gap-1" data-gps-manual="${tree.id}" aria-expanded="${gpsManualOpen.has(tree.id)}">
@@ -952,6 +985,9 @@ appRoot.addEventListener('click', async e=>{
   const gps = e.target.closest('[data-gps-capture]');
   if(gps){ captureGps(state.trees[Number(gps.dataset.gpsCapture)]); return; }
 
+  const gpsPlace = e.target.closest('[data-gps-place]');
+  if(gpsPlace){ openPlacer(Number(gpsPlace.dataset.gpsPlace)); return; }
+
   const gpsManual = e.target.closest('[data-gps-manual]');
   if(gpsManual){
     const id = Number(gpsManual.dataset.gpsManual);
@@ -1045,6 +1081,158 @@ appRoot.addEventListener('change', async e=>{
     persist(); renderStepLogistics(); return;
   }
 });
+
+/* ===================== Satellite pin placement =====================
+   Fine-tune a tree's position by dragging satellite imagery under a fixed crosshair, which avoids any
+   conflict between moving a pin and moving the map on a touch screen. Positions are kept in zoom-0
+   Web Mercator pixels (0..256) so zooming is just a scale factor. Needs a connection for imagery. */
+const mapModal = document.getElementById('mapModal');
+const mapCanvas = document.getElementById('mapCanvas');
+const mapCtx = mapCanvas.getContext('2d');
+const mapMsg = document.getElementById('mapMsg');
+const tileCache = new Map(); // "z/x/y" -> {img, ok}
+let mv = null; // {tree, cx, cy, zoom, orig, pointers, gesture, failed, loaded}
+const MAP_MAX_ZOOM = 21, MAP_MIN_ZOOM = 3;
+
+function worldToLatLng(x, y){
+  const lng = x / 256 * 360 - 180;
+  const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / 256))) * 180 / Math.PI;
+  return { lat, lng };
+}
+function showMapMsg(text){ mapMsg.textContent = text; mapMsg.classList.toggle('hidden', !text); }
+
+function openPlacer(ti){
+  const tree = state.trees[ti];
+  const own = geoPoints().find(p=>p.i===ti);
+  const others = geoPoints();
+  const start = own || (others.length ? { lat: others.reduce((s,p)=>s+p.lat,0)/others.length, lng: others.reduce((s,p)=>s+p.lng,0)/others.length } : null);
+  if(!start){ toast('Capture GPS or type coordinates for at least one tree first.'); return; }
+  const w0 = mercatorPx(start.lat, start.lng, 0);
+  mv = { tree, ti, cx: w0.x, cy: w0.y, zoom: 19, orig: own ? { x: w0.x, y: w0.y, acc: Number(tree.gps.accuracy)||0 } : null,
+         pointers: new Map(), gesture: null, failed: 0, loaded: 0 };
+  document.getElementById('mapTitle').textContent = `Place Tree #${ti+1}${tree.species ? ': '+tree.species : ''}`;
+  document.getElementById('mapResetBtn').disabled = !own;
+  document.getElementById('mapResetBtn').classList.toggle('opacity-40', !own);
+  document.getElementById('mapAttribution').textContent = SAT_ATTRIBUTION;
+  showMapMsg(navigator.onLine ? '' : 'You appear to be offline. Satellite imagery needs a connection; fine-tune pins when you are back in signal.');
+  mapModal.classList.remove('hidden');
+  sizeMapCanvas();
+  setTimeout(()=>{ if(mv && !mv.loaded && mv.failed) showMapMsg('Satellite imagery could not load. Check your connection; you can fine-tune pins later when you have signal.'); }, 5000);
+}
+function closePlacer(){ mapModal.classList.add('hidden'); mv = null; }
+function sizeMapCanvas(){
+  const r = mapCanvas.parentElement.getBoundingClientRect();
+  mapCanvas.style.width = r.width+'px'; mapCanvas.style.height = r.height+'px';
+  mapCanvas.width = Math.round(r.width*dpr()); mapCanvas.height = Math.round(r.height*dpr());
+  drawMap();
+}
+function mapTile(z, x, y){
+  const n = 1 << z; if(y < 0 || y >= n) return null;
+  x = ((x % n) + n) % n;
+  const key = `${z}/${x}/${y}`;
+  let t = tileCache.get(key);
+  if(!t){
+    t = { img: new Image(), ok: false };
+    t.img.crossOrigin = 'anonymous';
+    t.img.onload = ()=>{ t.ok = true; if(mv){ mv.loaded++; if(mapMsg.textContent.startsWith('Satellite imagery could not')) showMapMsg(''); drawMap(); } };
+    t.img.onerror = ()=>{ tileCache.delete(key); if(mv) mv.failed++; };
+    t.img.src = SAT_TILE_URL(z, x, y);
+    tileCache.set(key, t);
+    if(tileCache.size > 400) tileCache.delete(tileCache.keys().next().value);
+  }
+  return t.ok ? t.img : null;
+}
+function drawMap(){
+  if(!mv) return;
+  const W = mapCanvas.width / dpr(), H = mapCanvas.height / dpr();
+  const ctx = mapCtx;
+  ctx.setTransform(dpr(), 0, 0, dpr(), 0, 0);
+  ctx.fillStyle = '#222'; ctx.fillRect(0, 0, W, H);
+  const tz = Math.min(SAT_MAX_ZOOM, Math.max(1, Math.round(mv.zoom)));
+  const s = Math.pow(2, mv.zoom - tz);           // screen px per tile px
+  const wx = mv.cx * Math.pow(2, tz), wy = mv.cy * Math.pow(2, tz);
+  const x0 = Math.floor((wx - W/2/s) / 256), x1 = Math.floor((wx + W/2/s) / 256);
+  const y0 = Math.floor((wy - H/2/s) / 256), y1 = Math.floor((wy + H/2/s) / 256);
+  for(let tx = x0; tx <= x1; tx++) for(let ty = y0; ty <= y1; ty++){
+    const img = mapTile(tz, tx, ty);
+    if(img) ctx.drawImage(img, (tx*256 - wx)*s + W/2, (ty*256 - wy)*s + H/2, 256*s + 0.5, 256*s + 0.5);
+  }
+  const scr = (x, y)=>[(x - mv.cx) * Math.pow(2, mv.zoom) + W/2, (y - mv.cy) * Math.pow(2, mv.zoom) + H/2];
+  // Where GPS put this tree, with its accuracy as a dashed ring.
+  if(mv.orig){
+    const [ox, oy] = scr(mv.orig.x, mv.orig.y);
+    const latr = worldToLatLng(mv.cx, mv.cy).lat;
+    const pxPerM = Math.pow(2, mv.zoom) / (156543.03392 * Math.cos(latr * Math.PI/180));
+    ctx.setLineDash([6, 5]); ctx.lineWidth = 2; ctx.strokeStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(ox, oy, Math.max(6, mv.orig.acc * pxPerM), 0, Math.PI*2); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ox, oy, 3, 0, Math.PI*2); ctx.fill();
+  }
+  // The other trees, for reference.
+  ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+  geoPoints().forEach(p=>{
+    if(p.i === mv.ti) return;
+    const w = mercatorPx(p.lat, p.lng, 0); const [px, py] = scr(w.x, w.y);
+    ctx.beginPath(); ctx.arc(px, py, 10, 0, Math.PI*2); ctx.fillStyle = '#1A73E8'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(String(p.i+1), px, py + 1);
+  });
+  ctx.textBaseline = 'alphabetic';
+  const ll = worldToLatLng(mv.cx, mv.cy);
+  document.getElementById('mapCoords').textContent = `${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}`;
+}
+function mapZoomTo(z){ if(!mv) return; mv.zoom = Math.min(MAP_MAX_ZOOM, Math.max(MAP_MIN_ZOOM, z)); drawMap(); }
+function mapPanBy(dx, dy){ const k = Math.pow(2, mv.zoom); mv.cx -= dx / k; mv.cy -= dy / k; mv.cy = Math.min(256, Math.max(0, mv.cy)); }
+
+mapCanvas.addEventListener('pointerdown', e=>{
+  if(!mv) return;
+  try{ mapCanvas.setPointerCapture(e.pointerId); }catch(err){}
+  mv.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if(mv.pointers.size === 2){
+    const [a, b] = [...mv.pointers.values()];
+    mv.gesture = { mode: 'pinch', dist: Math.hypot(a.x-b.x, a.y-b.y), zoom: mv.zoom, mid: { x: (a.x+b.x)/2, y: (a.y+b.y)/2 } };
+  } else if(mv.pointers.size === 1){
+    const now = Date.now();
+    if(mv.lastTap && now - mv.lastTap < 300){ mapZoomTo(mv.zoom + 1); mv.lastTap = 0; }
+    else mv.lastTap = now;
+    mv.gesture = { mode: 'pan', x: e.clientX, y: e.clientY };
+  }
+});
+mapCanvas.addEventListener('pointermove', e=>{
+  if(!mv || !mv.pointers.has(e.pointerId)) return;
+  mv.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const g = mv.gesture; if(!g) return;
+  if(g.mode === 'pan'){ mapPanBy(e.clientX - g.x, e.clientY - g.y); g.x = e.clientX; g.y = e.clientY; mv.lastTap = 0; drawMap(); }
+  else if(g.mode === 'pinch' && mv.pointers.size >= 2){
+    const [a, b] = [...mv.pointers.values()];
+    const mid = { x: (a.x+b.x)/2, y: (a.y+b.y)/2 };
+    mapPanBy(mid.x - g.mid.x, mid.y - g.mid.y); g.mid = mid;
+    mapZoomTo(g.zoom + Math.log2(Math.max(1, Math.hypot(a.x-b.x, a.y-b.y)) / Math.max(1, g.dist)));
+  }
+});
+function mapPointerEnd(e){
+  if(!mv) return;
+  mv.pointers.delete(e.pointerId);
+  if(mv.pointers.size === 0) mv.gesture = null;
+  else if(mv.pointers.size === 1 && mv.gesture && mv.gesture.mode === 'pinch'){ const p = [...mv.pointers.values()][0]; mv.gesture = { mode: 'pan', x: p.x, y: p.y }; }
+}
+mapCanvas.addEventListener('pointerup', mapPointerEnd);
+mapCanvas.addEventListener('pointercancel', mapPointerEnd);
+mapCanvas.addEventListener('wheel', e=>{ if(!mv) return; e.preventDefault(); mapZoomTo(mv.zoom - e.deltaY * 0.0025); }, { passive: false });
+document.getElementById('mapZoomIn').addEventListener('click', ()=>mapZoomTo(Math.round(mv.zoom) + 1));
+document.getElementById('mapZoomOut').addEventListener('click', ()=>mapZoomTo(Math.round(mv.zoom) - 1));
+document.getElementById('mapResetBtn').addEventListener('click', ()=>{ if(mv && mv.orig){ mv.cx = mv.orig.x; mv.cy = mv.orig.y; drawMap(); } });
+document.getElementById('mapCancelBtn').addEventListener('click', closePlacer);
+document.getElementById('mapSaveBtn').addEventListener('click', ()=>{
+  if(!mv) return;
+  const tree = mv.tree, ll = worldToLatLng(mv.cx, mv.cy);
+  closePlacer();
+  if(!state.trees.includes(tree)) return;
+  tree.gps = { lat: ll.lat.toFixed(6), lng: ll.lng.toFixed(6), accuracy: '', source: 'map' };
+  persist();
+  setGpsStatus(tree, 'ok', 'Placed on the satellite image.');
+});
+window.addEventListener('resize', ()=>{ if(mv) sizeMapCanvas(); });
+document.addEventListener('keydown', e=>{ if(mv && e.key === 'Escape') closePlacer(); });
 
 /* ===================== Photo Doodle Editor =====================
    Coordinates: shapes are stored in image pixels (0..width, 0..height). The view maps them to the
@@ -2021,7 +2209,9 @@ async function drawPhotoPages(doc, pageW, pageH, margin){
       y += mapH + 12;
       doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor('#64748B');
       doc.text(map.satellite
-        ? 'Pins are placed from phone GPS, which is often off by 3-10 m. Check each pin against the photos.'
+        ? (state.trees.every(t=>!(t.gps.lat&&t.gps.lng) || t.gps.source==='map')
+            ? 'Pins were placed by hand on satellite imagery in the app.'
+            : 'Pins come from phone GPS (often off by 3-10 m) unless fine-tuned on the satellite view in the app.')
         : 'Satellite image unavailable (no connection when this was generated). Pin positions are relative to one another.', margin, y);
       if(unmapped.length){
         y += 11; doc.setTextColor('#9A3412');
