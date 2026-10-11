@@ -1409,20 +1409,17 @@ function renderSiteMapCanvas(width = 600, height = 440) {
   let minY = Math.min(...ys, -5), maxY = Math.max(...ys, 5);
   const span = Math.max(maxX - minX, maxY - minY, 10);
   const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  minX = cx - span / 2; maxX = cx + span / 2; minY = cy - span / 2; maxY = cy + span / 2;
 
+  const pxPerM = Math.min(width - 2 * pad, height - 2 * pad) / span;
   function project(x, y) {
-    return [
-      pad + (x - minX) / (maxX - minX) * (width - 2 * pad),
-      height - pad - (y - minY) / (maxY - minY) * (height - 2 * pad)
-    ];
+    return [width / 2 + (x - cx) * pxPerM, height / 2 - (y - cy) * pxPerM];
   }
 
   ctx.strokeStyle = '#AECBFA'; ctx.lineWidth = 1;
   ctx.strokeRect(pad, pad, width - 2 * pad, height - 2 * pad);
 
   const scaleMeters = niceRoundScale(span / 4);
-  const scalePx = scaleMeters / (maxX - minX) * (width - 2 * pad);
+  const scalePx = scaleMeters * pxPerM;
   ctx.strokeStyle = '#1A73E8'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(pad, height - 20); ctx.lineTo(pad + scalePx, height - 20); ctx.stroke();
   ctx.fillStyle = '#1A73E8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
@@ -1437,16 +1434,19 @@ function renderSiteMapCanvas(width = 600, height = 440) {
   ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('N', 0, -18);
   ctx.restore();
 
+  const k = Math.max(1, width / 600);
   xy.forEach(p => {
     const [px, py] = project(p.x, p.y);
-    ctx.beginPath(); ctx.arc(px, py, 10, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(px, py, 10 * k, 0, Math.PI * 2);
     ctx.fillStyle = '#1A73E8'; ctx.fill();
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 10px sans-serif';
+    ctx.fillStyle = '#ffffff'; ctx.font = `bold ${Math.round(10 * k)}px sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(String(p.i + 1), px, py + 1);
-    ctx.fillStyle = '#0B1220'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText((p.t.species || 'Tree ' + (p.i + 1)).slice(0, 18), px, py + 22);
+    ctx.fillStyle = '#0B1220'; ctx.font = `bold ${Math.round(10 * k)}px sans-serif`; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(treeLabel(p.i), px, py + 24 * k);
+    ctx.font = `${Math.round(9 * k)}px sans-serif`;
+    if (p.t.species) ctx.fillText(p.t.species.slice(0, 22), px, py + 36 * k);
   });
   return canvas;
 }
@@ -1454,9 +1454,13 @@ function renderSiteMapCanvas(width = 600, height = 440) {
 /* ===================== PDF generation ===================== */
 function taskTypeLabel(task){ return task.type==='Other (specify)' ? (task.customType||'Other') : task.type; }
 
-/* Tree IDs in PDFs: "[SingleOps #]-1", "-2"... (falls back to T1, T2 without a SingleOps #). */
-function treeLabel(ti){ const lead = String(state.client.leadNum||'').trim(); return lead ? `${lead}-${ti+1}` : `T${ti+1}`; }
-function taskLabel(ti, tj){ return treeLabel(ti) + String.fromCharCode(97+tj); }
+/* Photo labels match the SingleOps inventory: "[SingleOps #]-1" for tree 1's photo, "[SingleOps #]-1a"
+   for its task 1a. Without a SingleOps # they fall back to "Tree #1" and "1a". In the report text,
+   trees are "Tree #1" and tasks "1a", "1b". */
+function taskLetter(tj){ return String.fromCharCode(97+tj); }
+function treeLabel(ti){ const lead = String(state.client.leadNum||'').trim(); return lead ? `${lead}-${ti+1}` : `Tree #${ti+1}`; }
+function taskLabel(ti, tj){ const lead = String(state.client.leadNum||'').trim(); return (lead ? `${lead}-` : '') + (ti+1) + taskLetter(tj); }
+function photoSrc(photo){ return photo ? (photo.editedDataUrl || photo.originalDataUrl || null) : null; }
 
 /* Work type for the title, summarised from the job's tasks in the order they first appear. */
 const WORK_TYPE_GROUPS = [
@@ -1524,18 +1528,22 @@ async function buildMainPdfDoc(){
     const lines = doc.splitTextToSize(String(text), pageW-margin*2-indent);
     lines.forEach(l=>{ ensure(lineH); doc.text(l, margin+indent, y); y+=lineH; });
   }
-  function addPhoto(dataUrl, label, w){
-    try{
-      const props = doc.getImageProperties(dataUrl);
-      const h = w*props.height/props.width;
-      ensure(h+16);
-      doc.addImage(dataUrl, /^data:image\/png/i.test(dataUrl) ? 'PNG' : 'JPEG', margin+indentCur, y, w, h);
-      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor('#64748B');
-      doc.text('Photo '+label, margin+indentCur, y+h+10); doc.setTextColor('#111111');
-      y += h+20;
-    }catch(err){}
+  const right = pageW - margin, priceX = right, hoursX = right - 86;
+  /* One task line: "1a  Prune - Crown Raise ............ 3 hrs    $600.00", name wrapping before the columns. */
+  function taskRow(label, name, hours, price, bold){
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', bold?'bold':'normal');
+    const lines = doc.splitTextToSize(name, hoursX - 40 - (margin+38));
+    ensure(lineH*lines.length);
+    doc.setFont('helvetica','bold'); doc.text(label, margin+12, y);
+    doc.setFont('helvetica', bold?'bold':'normal');
+    lines.forEach((l,i)=>doc.text(l, margin+38, y + i*lineH));
+    doc.setFont('helvetica','normal');
+    doc.text(hours ? `${hours} hrs` : '-', hoursX, y, {align:'right'});
+    doc.text(price!=='' && price!=null ? money(price) : '-', priceX, y, {align:'right'});
+    y += lineH*lines.length;
   }
-  let indentCur = 0;
+  function photoNote(text){ doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor('#64748B'); doc.text(text, right, y-lineH, {align:'right'}); doc.setTextColor('#111111'); }
 
   const bannerH = drawTitleBanner(doc, pageW, margin, 17, 11, 1.25, 14);
   y = bannerH + 28;
@@ -1552,23 +1560,22 @@ async function buildMainPdfDoc(){
   y += 6;
 
   h2('Trees & Work Tasks');
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor('#64748B');
+  doc.text('LABOR HRS', hoursX, y, {align:'right'}); doc.text('PRICE', priceX, y, {align:'right'});
+  doc.setTextColor('#111111'); y += 12;
   state.trees.forEach((tree,ti)=>{
-    const label = treeLabel(ti);
-    ensure(20);
-    p(`${label}: ${tree.species||'Unspecified species'}  (DBH: ${tree.dbh||'-'}")`, 11, true);
-    indentCur = 10;
-    p('Location: '+(tree.location||'-'), 9.5, false, 10);
-    if(Number(tree.price)) p(`Tree Price: ${money(tree.price)}`, 9.5, true, 10);
-    if(tree.mainPhoto && (tree.mainPhoto.editedDataUrl||tree.mainPhoto.originalDataUrl)){ indentCur=10; addPhoto(tree.mainPhoto.editedDataUrl||tree.mainPhoto.originalDataUrl, label, 200); }
+    ensure(lineH*3);
+    doc.setDrawColor('#E2E8F0'); doc.line(margin, y-11, right, y-11);
+    p(`Tree #${ti+1}: ${tree.species||'Unspecified species'}  (DBH: ${tree.dbh||'-'}")`, 11, true);
+    if(photoSrc(tree.mainPhoto)) photoNote('Photo '+treeLabel(ti));
+    if(tree.location) p('Location: '+tree.location, 9.5, false, 12);
+    if(Number(tree.price)) taskRow('', 'Tree price', '', tree.price, false);
     tree.tasks.forEach((task,tj)=>{
-      const tlabel = taskLabel(ti,tj);
-      const tag = task.splitJob ? '  [SPLIT JOB]' : '';
-      p(`• (${tlabel}) ${taskTypeLabel(task)}${tag}`, 9.5, !!task.splitJob, 10);
-      if(task.details) p(task.details, 9, false, 16);
-      p(`Est. ${task.hours||'-'} hrs   Price: ${money(task.price)}`, 9, true, 16);
-      if(task.photo && (task.photo.editedDataUrl||task.photo.originalDataUrl)){ indentCur=16; addPhoto(task.photo.editedDataUrl||task.photo.originalDataUrl, tlabel, 160); }
+      taskRow(`${ti+1}${taskLetter(tj)}`, taskTypeLabel(task) + (task.splitJob ? '  [SPLIT JOB]' : ''), task.hours, task.price, !!task.splitJob);
+      if(task.details) p(task.details, 9, false, 38);
+      if(photoSrc(task.photo)){ doc.setTextColor('#64748B'); p('Photo '+taskLabel(ti,tj), 8, false, 38); doc.setTextColor('#111111'); }
     });
-    indentCur = 0; y += 4;
+    y += 8;
   });
 
   const eq = state.equipment;
@@ -1613,7 +1620,73 @@ async function buildMainPdfDoc(){
   p('Scheduling / Traffic Control: '+(state.notes.scheduling||'-'));
   p('Client Notes: '+(state.notes.client||'-'));
 
+  drawPhotoPages(doc, pageW, pageH, margin);
   return doc;
+}
+
+/* Photo pages at the end of the report. Tree photos come first, with the site map, for building the
+   SingleOps inventory map; task photos follow. Two per row, each labelled with its SingleOps ID. */
+function drawPhotoPages(doc, pageW, pageH, margin){
+  const treePhotos = [], taskPhotos = [];
+  state.trees.forEach((tree,ti)=>{
+    if(photoSrc(tree.mainPhoto)) treePhotos.push({ src: photoSrc(tree.mainPhoto), label: treeLabel(ti), sub: `Tree #${ti+1}: ${tree.species||'Unspecified species'}` });
+    tree.tasks.forEach((task,tj)=>{
+      if(photoSrc(task.photo)) taskPhotos.push({ src: photoSrc(task.photo), label: taskLabel(ti,tj), sub: `${ti+1}${taskLetter(tj)}: ${taskTypeLabel(task)}` });
+    });
+  });
+  const hasMap = geoPoints().length > 0;
+  if(!treePhotos.length && !taskPhotos.length && !hasMap) return;
+
+  const gap = 16, colW = (pageW - margin*2 - gap)/2, boxH = colW*0.75;
+  let y;
+  function heading(text, note){
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor('#1A73E8'); doc.text(text, margin, y); y += 14;
+    if(note){
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor('#475569');
+      doc.splitTextToSize(note, pageW - margin*2).forEach(l=>{ doc.text(l, margin, y); y += 12; });
+    }
+    doc.setTextColor('#111111'); y += 8;
+  }
+  function grid(items){
+    items.forEach((it,i)=>{
+      const col = i % 2;
+      if(col===0 && y + boxH + 30 > pageH - margin){ doc.addPage(); y = margin; }
+      const x = margin + col*(colW+gap);
+      try{
+        const props = doc.getImageProperties(it.src);
+        const k = Math.min(colW/props.width, boxH/props.height);
+        const w = props.width*k, h = props.height*k;
+        doc.setFillColor('#F1F5F9'); doc.rect(x, y, colW, boxH, 'F');
+        doc.addImage(it.src, /^data:image\/png/i.test(it.src) ? 'PNG' : 'JPEG', x + (colW-w)/2, y + (boxH-h)/2, w, h);
+      }catch(err){}
+      doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.text(it.label, x, y + boxH + 13);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor('#475569');
+      doc.text(doc.splitTextToSize(it.sub, colW)[0], x, y + boxH + 24); doc.setTextColor('#111111');
+      if(col===1 || i===items.length-1) y += boxH + 36;
+    });
+  }
+
+  doc.addPage(); y = margin;
+  if(treePhotos.length || hasMap){
+    heading('Tree Photos & Site Map: for the SingleOps inventory map',
+      'Use these to place and label each tree in the SingleOps inventory map. Photo labels match the SingleOps tree IDs.');
+    if(hasMap){
+      const mapW = pageW - margin*2, mapH = mapW*0.5;
+      const mapCanvas = renderSiteMapCanvas(1200, 600);
+      doc.setDrawColor('#CFE0FB'); doc.rect(margin, y, mapW, mapH);
+      doc.addImage(mapCanvas.toDataURL('image/jpeg', 0.9), 'JPEG', margin, y, mapW, mapH);
+      y += mapH + 12;
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor('#64748B');
+      doc.text('Pin positions come from captured GPS and are relative to one another, not a surveyed map.', margin, y);
+      doc.setTextColor('#111111'); y += 20;
+    }
+    grid(treePhotos);
+  }
+  if(taskPhotos.length){
+    if(y + 40 + boxH > pageH - margin){ doc.addPage(); y = margin; }
+    heading('Task Photos');
+    grid(taskPhotos);
+  }
 }
 
 function buildNotecardDoc(){
@@ -1752,13 +1825,13 @@ async function generateAndDownloadZip(btn){
     root.file('tree_coordinates.csv', buildCSV());
     const media = root.folder('media');
     state.trees.forEach((tree,ti)=>{
-      const label = String(ti+1);
+      const label = safeFilePart(treeLabel(ti));
       if(tree.mainPhoto){
-        if(tree.mainPhoto.originalDataUrl) media.file(`${label}-main-original.jpg`, dataUrlToBlob(tree.mainPhoto.originalDataUrl));
-        if(tree.mainPhoto.editedDataUrl) media.file(`${label}-main-edited.jpg`, dataUrlToBlob(tree.mainPhoto.editedDataUrl));
+        if(tree.mainPhoto.originalDataUrl) media.file(`${label}-original.jpg`, dataUrlToBlob(tree.mainPhoto.originalDataUrl));
+        if(tree.mainPhoto.editedDataUrl) media.file(`${label}-edited.jpg`, dataUrlToBlob(tree.mainPhoto.editedDataUrl));
       }
       tree.tasks.forEach((task,tj)=>{
-        const tl = label+String.fromCharCode(97+tj);
+        const tl = safeFilePart(taskLabel(ti,tj));
         if(task.photo){
           if(task.photo.originalDataUrl) media.file(`${tl}-original.jpg`, dataUrlToBlob(task.photo.originalDataUrl));
           if(task.photo.editedDataUrl) media.file(`${tl}-edited.jpg`, dataUrlToBlob(task.photo.editedDataUrl));
