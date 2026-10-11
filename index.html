@@ -433,9 +433,9 @@ function gpsDeniedHelp(){
     return 'Location permission is off. On iPhone: Settings → Privacy & Security → Location Services → ON, then '
       + (IS_STANDALONE ? 'scroll to "Safari Websites" (home-screen apps use Safari\'s setting) → "While Using the App". '
                        : '"Safari Websites" → "While Using the App". Also check Safari → aA menu → Website Settings → Location → Allow. ')
-      + 'Then tap Capture GPS again, or type the coordinates above.';
+      + 'Then tap Capture GPS again, or type the coordinates below.';
   }
-  return 'Location permission was denied. Allow location for this site in your browser settings, then tap Capture GPS again, or type the coordinates above.';
+  return 'Location permission was denied. Allow location for this site in your browser settings, then tap Capture GPS again, or type the coordinates below.';
 }
 function gpsStatusHtml(tree){
   const st = gpsStatus.get(tree.id);
@@ -444,8 +444,17 @@ function gpsStatusHtml(tree){
   return `<p class="mt-2 text-xs rounded-lg px-2.5 py-2 ${cls}" data-gps-status="${tree.id}">${esc(st.msg)}</p>`;
 }
 function setGpsStatus(tree, kind, msg){ gpsStatus.set(tree.id, {kind, msg}); if(state.step===1) renderStepTrees(); }
+/* Manual coordinate fields are tucked away until asked for (or until capture can't work). */
+const gpsManualOpen = new Set(); // tree.id
+function gpsSummary(tree){
+  const g = tree.gps;
+  if(!(g.lat && g.lng)) return 'Not captured';
+  const acc = g.accuracy ? `  ±${Math.round(Number(g.accuracy))} m` : '';
+  return esc(`${g.lat}, ${g.lng}${acc}`);
+}
 function focusManualGps(tree){
   const ti = state.trees.indexOf(tree);
+  if(!gpsManualOpen.has(tree.id)){ gpsManualOpen.add(tree.id); if(state.step===1) renderStepTrees(); }
   const el = appRoot.querySelector(`[data-bind="trees.${ti}.gps.lat"]`);
   if(el) el.focus();
 }
@@ -453,11 +462,11 @@ function focusManualGps(tree){
 function captureGps(tree){
   if(!tree || gpsBusy.has(tree.id)) return;
   if(!window.isSecureContext){
-    setGpsStatus(tree, 'error', 'GPS needs a secure (https://) connection. Open the app from its https:// address, or type the coordinates above.');
+    setGpsStatus(tree, 'error', 'GPS needs a secure (https://) connection. Open the app from its https:// address, or type the coordinates below.');
     focusManualGps(tree); return;
   }
   if(!('geolocation' in navigator)){
-    setGpsStatus(tree, 'error', 'This browser does not support GPS. Type the coordinates above.');
+    setGpsStatus(tree, 'error', 'This browser does not support GPS. Type the coordinates below.');
     focusManualGps(tree); return;
   }
   gpsBusy.add(tree.id);
@@ -480,9 +489,9 @@ function captureGps(tree){
     }
     finish();
     const msg = err.code===1 ? gpsDeniedHelp()
-      : err.code===2 ? 'Location unavailable (no GPS signal). Move into the open and try again, or type the coordinates above.'
-      : err.code===3 ? 'GPS timed out. Try again in the open, or type the coordinates above.'
-      : 'GPS failed: '+(err.message||'unknown error')+'. Type the coordinates above.';
+      : err.code===2 ? 'Location unavailable (no GPS signal). Move into the open and try again, or type the coordinates below.'
+      : err.code===3 ? 'GPS timed out. Try again in the open, or type the coordinates below.'
+      : 'GPS failed: '+(err.message||'unknown error')+'. Type the coordinates below.';
     setGpsStatus(tree, 'error', msg);
     focusManualGps(tree);
   };
@@ -579,17 +588,26 @@ function renderStepTrees(){
         ${photoSlotHtml(tree.mainPhoto, ti, null, 'main')}
 
         <div>
-          <span class="block text-xs font-medium text-slate-500 mb-1">GPS Location <span class="font-normal text-slate-400">(capture, or type/paste "lat, lng")</span></span>
+          <div class="flex items-baseline justify-between gap-2 mb-1">
+            <span class="text-xs font-medium text-slate-500">GPS Location</span>
+            <span class="text-xs ${tree.gps.lat&&tree.gps.lng ? 'text-slate-700' : 'text-slate-400'} truncate" data-gps-summary="${ti}">${gpsSummary(tree)}</span>
+          </div>
+          <div class="flex gap-2">
+            <button class="flex-1 text-xs font-medium bg-brand text-white rounded-lg py-2 disabled:opacity-60" data-gps-capture="${ti}" ${gpsBusy.has(tree.id)?'disabled':''}>${gpsBusy.has(tree.id)?'📍 Capturing…':'📍 Capture GPS'}</button>
+            ${(tree.gps.lat&&tree.gps.lng) ? `<a class="text-xs font-medium bg-slate-100 rounded-lg py-2 px-3 flex items-center" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${encodeURIComponent(tree.gps.lat)},${encodeURIComponent(tree.gps.lng)}">View on Map</a>` : ''}
+          </div>
+          ${gpsStatusHtml(tree)}
+          <button class="mt-2 text-xs font-medium text-brand flex items-center gap-1" data-gps-manual="${tree.id}" aria-expanded="${gpsManualOpen.has(tree.id)}">
+            Enter coordinates manually
+            <svg class="w-3.5 h-3.5 transition-transform ${gpsManualOpen.has(tree.id)?'rotate-180':''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          ${gpsManualOpen.has(tree.id) ? `
+          <p class="text-xs text-slate-400 mt-1.5 mb-1">Type each value, or paste "lat, lng" into Latitude.</p>
           <div class="grid grid-cols-3 gap-2">
             <input data-bind="trees.${ti}.gps.lat" data-gps-field="lat" value="${esc(tree.gps.lat)}" placeholder="Latitude" autocomplete="off" class="border border-slate-300 rounded-lg px-2 py-2 text-sm min-w-0">
             <input data-bind="trees.${ti}.gps.lng" data-gps-field="lng" value="${esc(tree.gps.lng)}" placeholder="Longitude" autocomplete="off" class="border border-slate-300 rounded-lg px-2 py-2 text-sm min-w-0">
             <input data-bind="trees.${ti}.gps.accuracy" value="${esc(tree.gps.accuracy)}" placeholder="± meters" inputmode="decimal" class="border border-slate-300 rounded-lg px-2 py-2 text-sm min-w-0">
-          </div>
-          ${gpsStatusHtml(tree)}
-          <div class="flex gap-2 mt-2">
-            <button class="flex-1 text-xs font-medium bg-brand text-white rounded-lg py-2 disabled:opacity-60" data-gps-capture="${ti}" ${gpsBusy.has(tree.id)?'disabled':''}>${gpsBusy.has(tree.id)?'📍 Capturing…':'📍 Capture GPS'}</button>
-            ${(tree.gps.lat&&tree.gps.lng) ? `<a class="text-xs font-medium bg-slate-100 rounded-lg py-2 px-3 flex items-center" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${encodeURIComponent(tree.gps.lat)},${encodeURIComponent(tree.gps.lng)}">View on Map</a>` : ''}
-          </div>
+          </div>` : ''}
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -833,6 +851,14 @@ appRoot.addEventListener('click', async e=>{
 
   const gps = e.target.closest('[data-gps-capture]');
   if(gps){ captureGps(state.trees[Number(gps.dataset.gpsCapture)]); return; }
+
+  const gpsManual = e.target.closest('[data-gps-manual]');
+  if(gpsManual){
+    const id = Number(gpsManual.dataset.gpsManual);
+    if(gpsManualOpen.has(id)) gpsManualOpen.delete(id); else gpsManualOpen.add(id);
+    renderStepTrees();
+    return;
+  }
 
   const photoExpand = e.target.closest('[data-photo-expand]');
   if(photoExpand){
