@@ -133,6 +133,8 @@ const SPECIES_OPTIONS = [
   'Boxwood (shrub)','Burning Bush (shrub)','Serviceberry','Sweetgum','Kousa Dogwood'
 ];
 const COLORS = ['#FF3B30','#FFCC00','#FFFFFF','#111111','#1A73E8','#34C759'];
+const ARBORISTS = ['Ian Bailey','Ziggy Zartman','Andy Ross','Jason Stoner','Riley Kemp','Chris Hamley','Corey Dalrymple'];
+const ARB_PREFS_KEY = 'rtecArboristPrefs';
 
 /* ===================== State ===================== */
 let uidCounter = 1;
@@ -142,7 +144,7 @@ function newTree(){ return { id: uid(), mainPhoto:null, gps:{lat:'',lng:'',accur
 function newState(){
   return {
     step: 0,
-    client: { leadNum:'', city:'', name:'', phone:'', email:'', date:'', arborist:'', crewSize:'' },
+    client: { leadNum:'', city:'', name:'', phone:'', email:'', date:'', arborist: arboristPrefs().last, crewSize:'' },
     trees: [newTree()],
     equipment: {
       bucketTruck:'None', chipper:'None', chipTruck:'None', extraChipTruck:'No',
@@ -338,11 +340,84 @@ function renderStepClient(){
         <input data-bind="client.email" value="${esc(c.email)}" type="email" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
       <label class="text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Date</span>
         <input data-bind="client.date" value="${esc(c.date)}" type="date" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
-      <label class="text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Arborist Name</span>
-        <input data-bind="client.arborist" value="${esc(c.arborist)}" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
+      <div class="col-span-2 text-sm"><label for="arboristInput" class="block text-xs font-medium text-slate-500 mb-1">Arborist/ Sales Rep</label>
+        <div class="relative" id="arboristBox">
+          <input id="arboristInput" data-bind="client.arborist" value="${esc(c.arborist)}" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
+            placeholder="Pick or type a name" role="combobox" aria-expanded="false" aria-controls="arboristMenu" class="w-full border border-slate-300 rounded-lg pl-3 pr-10 py-2">
+          <button type="button" data-arb-toggle aria-label="Show names" class="absolute inset-y-0 right-0 w-10 flex items-center justify-center text-slate-500">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
+          <ul id="arboristMenu" role="listbox" style="scroll-margin-bottom:96px" class="hidden absolute z-20 left-0 right-0 mt-1 max-h-64 overflow-auto bg-white border border-slate-300 rounded-lg shadow-lg py-1"></ul>
+        </div></div>
     </div>
   </div>`;
 }
+
+/* ===================== Arborist / Sales Rep picker =====================
+   A text box with a dropdown of the standard names plus any names typed on this device before.
+   Typing filters the list. The last name used becomes the default for new jobs. Stored in
+   localStorage because it is a per-device preference, not part of the job. */
+function arboristPrefs(){
+  try{
+    const p = JSON.parse(localStorage.getItem(ARB_PREFS_KEY)||'{}');
+    return { last: typeof p.last==='string' ? p.last : '', custom: Array.isArray(p.custom) ? p.custom.filter(n=>typeof n==='string' && n.trim()) : [] };
+  }catch(e){ return { last:'', custom:[] }; }
+}
+function saveArboristPrefs(p){ try{ localStorage.setItem(ARB_PREFS_KEY, JSON.stringify(p)); }catch(e){} }
+function arboristNames(){
+  const names = ARBORISTS.slice();
+  arboristPrefs().custom.forEach(n=>{ if(!names.some(x=>x.toLowerCase()===n.toLowerCase())) names.push(n); });
+  return names;
+}
+/* Remember the name as the default, and add it to the list if it is new. */
+function commitArborist(){
+  const name = String(state.client.arborist||'').trim().replace(/\s+/g,' ');
+  if(!name) return;
+  const p = arboristPrefs();
+  const match = arboristNames().find(x=>x.toLowerCase()===name.toLowerCase());
+  if(!match) p.custom.push(name);
+  p.last = match || name;
+  saveArboristPrefs(p);
+  // Tidy the job's copy too ("ian  bailey" -> "Ian Bailey").
+  if(state.client.arborist!==p.last){
+    state.client.arborist = p.last; persist();
+    const input = document.getElementById('arboristInput'); if(input) input.value = p.last;
+  }
+}
+function renderArboristMenu(showAll){
+  const menu = document.getElementById('arboristMenu'), input = document.getElementById('arboristInput');
+  if(!menu) return;
+  const q = input.value.trim().toLowerCase();
+  const custom = new Set(arboristPrefs().custom.map(n=>n.toLowerCase()));
+  const all = arboristNames();
+  const exact = all.some(n=>n.toLowerCase()===q);
+  const names = (showAll || !q || exact) ? all : all.filter(n=>n.toLowerCase().includes(q));
+  if(!names.length){ closeArboristMenu(); return; }
+  menu.innerHTML = names.map(n=>{
+    const cur = n.toLowerCase()===q;
+    return `<li class="flex items-center ${cur?'bg-brand-light':''}">
+      <button type="button" role="option" aria-selected="${cur}" data-arb-opt="${esc(n)}" class="flex-1 text-left px-3 py-2.5 ${cur?'font-semibold text-brand-dark':''}">${esc(n)}</button>
+      ${custom.has(n.toLowerCase()) ? `<button type="button" data-arb-del="${esc(n)}" aria-label="Forget ${esc(n)}" class="px-3 py-2.5 text-slate-400 hover:text-red-600">✕</button>` : ''}
+    </li>`;
+  }).join('');
+  const wasHidden = menu.classList.contains('hidden');
+  menu.classList.remove('hidden');
+  input.setAttribute('aria-expanded','true');
+  // Make room below the field so the list can scroll clear of the fixed footer bar.
+  if(wasHidden){ appRoot.style.paddingBottom = '22rem'; menu.scrollIntoView({block:'nearest'}); }
+}
+function closeArboristMenu(){
+  const menu = document.getElementById('arboristMenu');
+  if(menu) menu.classList.add('hidden');
+  appRoot.style.paddingBottom = '';
+  const input = document.getElementById('arboristInput');
+  if(input) input.setAttribute('aria-expanded','false');
+}
+function pickArborist(name){
+  const input = document.getElementById('arboristInput');
+  input.value = name; state.client.arborist = name; persist();
+  commitArborist(); closeArboristMenu();
+}
+document.addEventListener('pointerdown', e=>{ if(!e.target.closest('#arboristBox')) closeArboristMenu(); });
 
 /* ===================== GPS capture =====================
    iOS only shows the location prompt when getCurrentPosition() runs directly inside a tap and the
@@ -720,6 +795,22 @@ appRoot.addEventListener('click', async e=>{
   const rmTask = e.target.closest('[data-remove-task]');
   if(rmTask){ const ti=Number(rmTask.dataset.removeTask), tj=Number(rmTask.dataset.removeTaskIdx); state.trees[ti].tasks.splice(tj,1); renderStepTrees(); persist(); return; }
 
+  if(e.target.closest('[data-arb-toggle]')){
+    const menu = document.getElementById('arboristMenu');
+    if(menu.classList.contains('hidden')) renderArboristMenu(true); else closeArboristMenu();
+    return;
+  }
+  const arbOpt = e.target.closest('[data-arb-opt]');
+  if(arbOpt){ pickArborist(arbOpt.dataset.arbOpt); return; }
+  const arbDel = e.target.closest('[data-arb-del]');
+  if(arbDel){
+    const name = arbDel.dataset.arbDel.toLowerCase(), p = arboristPrefs();
+    p.custom = p.custom.filter(n=>n.toLowerCase()!==name);
+    if(p.last.toLowerCase()===name) p.last = '';
+    saveArboristPrefs(p); renderArboristMenu(true);
+    return;
+  }
+
   const gps = e.target.closest('[data-gps-capture]');
   if(gps){ captureGps(state.trees[Number(gps.dataset.gpsCapture)]); return; }
 
@@ -761,7 +852,15 @@ photoFileInput.addEventListener('change', async ()=>{
   renderStepTrees(); persist();
 });
 
+appRoot.addEventListener('input', e=>{ if(e.target.id==='arboristInput') renderArboristMenu(false); });
+appRoot.addEventListener('focusin', e=>{ if(e.target.id==='arboristInput') renderArboristMenu(true); });
+appRoot.addEventListener('keydown', e=>{
+  if(e.target.id!=='arboristInput') return;
+  if(e.key==='Escape') closeArboristMenu();
+  else if(e.key==='Enter'){ e.preventDefault(); commitArborist(); closeArboristMenu(); e.target.blur(); }
+});
 appRoot.addEventListener('change', async e=>{
+  if(e.target.id==='arboristInput'){ setTimeout(commitArborist, 250); return; }
   if(e.target.matches && e.target.matches('[data-gps-field]')){ onManualGpsChange(e.target); return; }
   const customLabel = e.target.closest('[data-custom-access-label]');
   if(customLabel){ state.accessPermits.custom[Number(customLabel.dataset.customAccessLabel)].label = customLabel.value; persist(); return; }
