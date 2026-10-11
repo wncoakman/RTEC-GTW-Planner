@@ -530,18 +530,38 @@ function onManualGpsChange(input){
 }
 
 /* ===================== Step 1: Tree-by-tree inventory ===================== */
+/* Photo slots stay compact on a phone: a small thumbnail beside the buttons. Tapping the thumbnail
+   expands it to full width; tapping again (or Collapse) shrinks it back. Expanded state is only
+   kept for this session and is keyed by tree/task id so it survives adding or removing items. */
+const expandedPhotos = new Set();
 function photoSlotHtml(photo, treeIdx, taskIdx, role){
-  const hasPhoto = photo && (photo.editedDataUrl || photo.originalDataUrl);
-  const src = hasPhoto ? (photo.editedDataUrl || photo.originalDataUrl) : '';
+  const tree = state.trees[treeIdx];
+  const key = role==='main' ? 't'+tree.id : 'k'+tree.tasks[taskIdx].id;
+  const src = photoSrc(photo);
+  const target = `data-tree-idx="${treeIdx}" ${taskIdx!=null?`data-task-idx="${taskIdx}"`:''} data-role="${role}"`;
+  const what = role==='main' ? 'Tree Photo' : 'Task Photo';
+  if(!src){
+    return `<button class="w-full text-xs font-medium text-slate-600 bg-white border border-dashed border-slate-300 rounded-lg py-2.5" data-photo-pick ${target}>📷 Add ${what}</button>`;
+  }
+  const pick = `<button class="flex-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-lg py-2" data-photo-pick ${target}>📷 Replace</button>`;
+  const edit = `<button class="flex-1 text-xs font-medium bg-brand-light text-brand-dark rounded-lg py-2" data-photo-edit ${target}>✏️ Edit</button>`;
+  if(expandedPhotos.has(key)){
+    return `
+    <div class="space-y-1.5">
+      <button class="block w-full" data-photo-expand="${key}" aria-expanded="true" aria-label="Collapse ${what.toLowerCase()}"><img src="${src}" class="photo-thumb" alt="${what}"></button>
+      <div class="flex gap-2">
+        <button class="text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-lg py-2 px-3" data-photo-expand="${key}">▲ Collapse</button>
+        ${pick}${edit}
+      </div>
+    </div>`;
+  }
   return `
-  <div class="space-y-1.5">
-    ${hasPhoto ? `<img src="${src}" class="photo-thumb">` : `<div class="photo-thumb flex items-center justify-center text-slate-400 text-xs border border-dashed border-slate-300">No photo</div>`}
-    <div class="flex gap-2">
-      <button class="flex-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-lg py-2"
-        data-photo-pick data-tree-idx="${treeIdx}" ${taskIdx!=null?`data-task-idx="${taskIdx}"`:''} data-role="${role}">📷 ${hasPhoto ? 'Replace Photo' : 'Add Photo'}</button>
-      <button class="flex-1 text-xs font-medium bg-brand-light text-brand-dark rounded-lg py-2 disabled:opacity-40" ${hasPhoto?'':'disabled'}
-        data-photo-edit data-tree-idx="${treeIdx}" ${taskIdx!=null?`data-task-idx="${taskIdx}"`:''} data-role="${role}">Edit / Annotate</button>
-    </div>
+  <div class="flex items-center gap-2">
+    <button class="relative shrink-0" data-photo-expand="${key}" aria-expanded="false" aria-label="Expand ${what.toLowerCase()}">
+      <img src="${src}" class="w-14 h-14 object-cover rounded-lg bg-slate-100" alt="${what}">
+      <span class="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] leading-none rounded px-1 py-0.5">⤢</span>
+    </button>
+    ${pick}${edit}
   </div>`;
 }
 
@@ -813,6 +833,17 @@ appRoot.addEventListener('click', async e=>{
 
   const gps = e.target.closest('[data-gps-capture]');
   if(gps){ captureGps(state.trees[Number(gps.dataset.gpsCapture)]); return; }
+
+  const photoExpand = e.target.closest('[data-photo-expand]');
+  if(photoExpand){
+    const key = photoExpand.dataset.photoExpand;
+    if(expandedPhotos.has(key)) expandedPhotos.delete(key); else expandedPhotos.add(key);
+    renderStepTrees();
+    // Collapsing a tall photo shifts the page; keep this slot on screen.
+    const slot = appRoot.querySelector(`[data-photo-expand="${key}"]`);
+    if(slot) slot.scrollIntoView({block:'nearest'});
+    return;
+  }
 
   const photoPick = e.target.closest('[data-photo-pick]');
   if(photoPick){
