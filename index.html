@@ -1681,7 +1681,8 @@ function drawPhotoPages(doc, pageW, pageH, margin){
     });
   });
   const hasMap = geoPoints().length > 0;
-  if(!treePhotos.length && !taskPhotos.length && !hasMap) return;
+  const mapped = new Set(geoPoints().map(p=>p.i));
+  const unmapped = state.trees.map((t,i)=>i).filter(i=>!mapped.has(i)).map(i=>treeLabel(i));
 
   const gap = 16, colW = (pageW - margin*2 - gap)/2, boxH = colW*0.75;
   let y;
@@ -1713,9 +1714,19 @@ function drawPhotoPages(doc, pageW, pageH, margin){
   }
 
   doc.addPage(); y = margin;
-  if(treePhotos.length || hasMap){
+  {
     heading('Tree Photos & Site Map: for the SingleOps inventory map',
       'Use these to place and label each tree in the SingleOps inventory map. Photo labels match the SingleOps tree IDs.');
+    if(!hasMap){
+      // Always show where the map goes, so a missing map is explained rather than silently absent.
+      const boxH = 70;
+      doc.setFillColor('#FFF7ED'); doc.setDrawColor('#FDBA74'); doc.rect(margin, y, pageW - margin*2, boxH, 'FD');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor('#9A3412');
+      doc.text('No site map: none of the trees have GPS coordinates.', margin + 12, y + 26);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      doc.text('Capture GPS on each tree (needs the https site), or type/paste "lat, lng" into its GPS fields.', margin + 12, y + 44);
+      doc.setTextColor('#111111'); y += boxH + 20;
+    }
     if(hasMap){
       const mapW = pageW - margin*2, mapH = mapW*0.5;
       const mapCanvas = renderSiteMapCanvas(1200, 600);
@@ -1724,6 +1735,10 @@ function drawPhotoPages(doc, pageW, pageH, margin){
       y += mapH + 12;
       doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor('#64748B');
       doc.text('Pin positions come from captured GPS and are relative to one another, not a surveyed map.', margin, y);
+      if(unmapped.length){
+        y += 11; doc.setTextColor('#9A3412');
+        doc.splitTextToSize('Not on the map (no GPS): '+unmapped.join(', '), pageW - margin*2).forEach((l,i)=>{ doc.text(l, margin, y + i*11); if(i) y += 11; });
+      }
       doc.setTextColor('#111111'); y += 20;
     }
     grid(treePhotos);
