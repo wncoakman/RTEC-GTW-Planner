@@ -479,8 +479,28 @@ function focusManualGps(tree){
   if(el) el.focus();
 }
 
+/* Capture averages fixes for a few seconds instead of taking the first one: under canopy single
+   fixes wander by several meters, and the average of the better ones is noticeably closer.
+   Works offline (GPS needs no data connection); the first fix just takes longer without one.
+   Tapping the button again while averaging stops early and keeps what has been collected. */
+const GPS_AVG_MS = 15000;        // averaging window, counted from the first fix
+const GPS_FIRST_FIX_MS = 60000;  // how long to wait for any fix (cold start offline can be slow)
+const gpsSessions = new Map();   // tree.id -> {fixes, stop}
+
+function averageFixes(fixes){
+  // Drop readings much worse than the best one, then weight the rest by 1/accuracy².
+  const sorted = fixes.slice().sort((p,q)=>p.acc-q.acc);
+  const best = sorted[0].acc;
+  const keep = sorted.filter(f=>f.acc <= Math.max(best*2, best+5));
+  let w = 0, lat = 0, lng = 0;
+  keep.forEach(f=>{ const k = 1/Math.max(1, f.acc)**2; w += k; lat += f.lat*k; lng += f.lng*k; });
+  return { lat: lat/w, lng: lng/w, acc: Math.round(keep[0].acc), used: keep.length, total: fixes.length };
+}
+
 function captureGps(tree){
-  if(!tree || gpsBusy.has(tree.id)) return;
+  if(!tree) return;
+  const running = gpsSessions.get(tree.id);
+  if(running){ running.stop(true); return; }
   if(!window.isSecureContext){
     setGpsStatus(tree, 'error', 'GPS needs a secure (https://) connection. Open the app from its https:// address, or type the coordinates below.');
     focusManualGps(tree); return;
@@ -489,35 +509,65 @@ function captureGps(tree){
     setGpsStatus(tree, 'error', 'This browser does not support GPS. Type the coordinates below.');
     focusManualGps(tree); return;
   }
-  gpsBusy.add(tree.id);
+  const geo = navigator.geolocation;
+  const fixes = [];
+  let watchId = null, firstFixTimer = null, avgTimer = null, done = false;
 
-  const finish = ()=>{ gpsBusy.delete(tree.id); };
-  const onSuccess = pos=>{
-    finish();
+  function cleanup(){
+    done = true;
+    if(watchId!=null) geo.clearWatch(watchId);
+    clearTimeout(firstFixTimer); clearTimeout(avgTimer);
+    gpsSessions.delete(tree.id); gpsBusy.delete(tree.id);
+  }
+  function save(){
+    cleanup();
     if(!state.trees.includes(tree)) return; // tree was removed meanwhile
-    const acc = Math.round(pos.coords.accuracy);
-    tree.gps = { lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6), accuracy: acc };
+    const r = averageFixes(fixes);
+    tree.gps = { lat: r.lat.toFixed(6), lng: r.lng.toFixed(6), accuracy: r.acc };
     persist();
-    if(acc > 25) setGpsStatus(tree, 'warn', `Captured, but accuracy is weak (±${acc} m). Step into the open and capture again, or adjust manually.`);
-    else setGpsStatus(tree, 'ok', `Captured (±${acc} m).`);
-  };
-  const onError = (err, triedFallback)=>{
-    // Under heavy canopy a high-accuracy fix can time out; retry once accepting a coarser/recent fix.
-    if(!triedFallback && err.code!==1){
-      navigator.geolocation.getCurrentPosition(onSuccess, e2=>onError(e2, true), {enableHighAccuracy:false, timeout:15000, maximumAge:60000});
-      return;
-    }
-    finish();
+    const n = r.total>1 ? ` from ${r.total} readings` : '';
+    if(r.acc > 25) setGpsStatus(tree, 'warn', `Captured${n}, but accuracy is weak (±${r.acc} m). Step into the open and capture again, or fine-tune it on the satellite view later.`);
+    else setGpsStatus(tree, 'ok', `Captured${n} (±${r.acc} m).`);
+  }
+  function fail(err){
+    cleanup();
+    if(!state.trees.includes(tree)) return;
     const msg = err.code===1 ? gpsDeniedHelp()
       : err.code===2 ? 'Location unavailable (no GPS signal). Move into the open and try again, or type the coordinates below.'
       : err.code===3 ? 'GPS timed out. Try again in the open, or type the coordinates below.'
       : 'GPS failed: '+(err.message||'unknown error')+'. Type the coordinates below.';
     setGpsStatus(tree, 'error', msg);
     focusManualGps(tree);
-  };
-  // Must be called synchronously inside the tap handler for iOS to show its permission prompt.
-  navigator.geolocation.getCurrentPosition(onSuccess, e=>onError(e, false), {enableHighAccuracy:true, timeout:15000, maximumAge:0});
-  setGpsStatus(tree, 'warn', 'Getting location… If asked, tap "Allow".');
+  }
+  function stop(early){
+    if(done) return;
+    if(fixes.length) save();
+    else if(early){ cleanup(); setGpsStatus(tree, 'warn', 'GPS capture cancelled.'); }
+    else fail({code:3});
+  }
+  function onFix(pos){
+    if(done) return;
+    fixes.push({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy });
+    if(fixes.length===1){ clearTimeout(firstFixTimer); avgTimer = setTimeout(()=>stop(false), GPS_AVG_MS); }
+    const best = Math.round(Math.min(...fixes.map(f=>f.acc)));
+    setGpsStatus(tree, best>25 ? 'warn' : 'ok', `Averaging… ${fixes.length} reading${fixes.length>1?'s':''}, best ±${best} m. Hold still at the trunk. Tap Stop to finish early.`);
+  }
+  function onError(err){
+    if(done) return;
+    if(err.code===1) return fail(err);
+    // Under heavy canopy high accuracy can fail outright; settle for a coarse/recent fix once.
+    if(!fixes.length){
+      if(watchId!=null){ geo.clearWatch(watchId); watchId = null; }
+      geo.getCurrentPosition(p=>{ onFix(p); stop(false); }, fail, {enableHighAccuracy:false, timeout:15000, maximumAge:60000});
+    }
+  }
+
+  gpsBusy.add(tree.id);
+  gpsSessions.set(tree.id, { fixes, stop });
+  // Must start synchronously inside the tap handler for iOS to show its permission prompt.
+  watchId = geo.watchPosition(onFix, onError, {enableHighAccuracy:true, maximumAge:0, timeout:GPS_FIRST_FIX_MS});
+  firstFixTimer = setTimeout(()=>stop(false), GPS_FIRST_FIX_MS);
+  setGpsStatus(tree, 'warn', 'Getting location… If asked, tap "Allow". Without cell signal the first reading can take up to a minute.');
 }
 
 /* Manual entry: accepts "38.9, -77.03" pasted into either box, or a value ending in N/S/E/W. */
@@ -613,7 +663,7 @@ function renderStepTrees(){
             <span class="text-xs ${tree.gps.lat&&tree.gps.lng ? 'text-slate-700' : 'text-slate-400'} truncate" data-gps-summary="${ti}">${gpsSummary(tree)}</span>
           </div>
           <div class="flex gap-2">
-            <button class="flex-1 text-xs font-medium bg-brand text-white rounded-lg py-2 disabled:opacity-60" data-gps-capture="${ti}" ${gpsBusy.has(tree.id)?'disabled':''}>${gpsBusy.has(tree.id)?'📍 Capturing…':'📍 Capture GPS'}</button>
+            <button class="flex-1 text-xs font-medium ${gpsBusy.has(tree.id)?'bg-slate-700':'bg-brand'} text-white rounded-lg py-2" data-gps-capture="${ti}">${gpsBusy.has(tree.id)?'■ Stop &amp; save':'📍 Capture GPS'}</button>
             ${(tree.gps.lat&&tree.gps.lng) ? `<a class="text-xs font-medium bg-slate-100 rounded-lg py-2 px-3 flex items-center" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${encodeURIComponent(tree.gps.lat)},${encodeURIComponent(tree.gps.lng)}">View on Map</a>` : ''}
           </div>
           ${gpsStatusHtml(tree)}
