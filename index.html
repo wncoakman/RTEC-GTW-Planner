@@ -1523,8 +1523,7 @@ function pdfTitle(){
 }
 /* Draws the title banner across the top of the first page, wrapping and shrinking the text to fit.
    Returns the banner height. Units follow the document (pt or in). */
-function drawTitleBanner(doc, pageW, margin, maxSize, minSize, lineFactor, pad){
-  const title = pdfTitle();
+function drawTitleBanner(doc, pageW, margin, maxSize, minSize, lineFactor, pad, title = pdfTitle()){
   doc.setFont('helvetica','bold');
   let size = maxSize, lines;
   for(;;){
@@ -1736,6 +1735,13 @@ function drawPhotoPages(doc, pageW, pageH, margin){
   }
 }
 
+/* Man-hours for the first visit: every task's hours except those split off to a later visit. */
+function mainVisitHours(){
+  let h = 0;
+  state.trees.forEach(tree=>tree.tasks.forEach(task=>{ if(!task.splitJob) h += Number(task.hours)||0; }));
+  return Math.round(h*100)/100;
+}
+
 /* The 5x7 crew card's sections. A section only appears when it has something to say, and nothing
    already in the title banner (SingleOps #, client, city, date) is repeated. */
 function notecardSections(){
@@ -1743,9 +1749,12 @@ function notecardSections(){
   const add = (head, paras)=>{ paras = paras.map(t=>String(t||'').trim()).filter(Boolean); if(paras.length) out.push({ head, paras }); };
   const c = state.client;
   add(null, [[c.phone && 'Phone: '+c.phone, c.email && 'Email: '+c.email].filter(Boolean).join('    ')]);
-  const splits = [];
-  state.trees.forEach((tree,ti)=>tree.tasks.forEach(task=>{
-    if(task.splitJob) splits.push(`• ${treeLabel(ti)}: ${taskTypeLabel(task)}  ${task.hours||'-'}h  ${money(task.price)}`);
+  // Each split task is its own return visit, numbered on from the first visit: [SingleOps #]-2, -3...
+  const splits = [], lead = String(c.leadNum||'').trim();
+  state.trees.forEach((tree,ti)=>tree.tasks.forEach((task,tj)=>{
+    if(!task.splitJob) return;
+    const n = splits.length + 2;
+    splits.push(`${lead ? lead+'-'+n : 'Visit '+n}: Tree #${ti+1} (${ti+1}${taskLetter(tj)}) ${taskTypeLabel(task)}  ${task.hours||'-'}h  ${money(task.price)}`);
   }));
   add('Split Visits', splits);
   add('Equipment', [selectedEquipment().map(([n,d])=>d ? `${n} ${d}` : n).join(', ')]);
@@ -1764,7 +1773,7 @@ function buildNotecardDoc(){
   const doc = new jsPDF({ unit:'in', format:[5,7], orientation:'landscape' });
   const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight();
   const margin = 0.3, gap = 0.3, colW = (pageW - margin*2 - gap)/2;
-  const bannerH = drawTitleBanner(doc, pageW, margin, 14, 9, 1.2, 0.12);
+  const bannerH = drawTitleBanner(doc, pageW, margin, 14, 9, 1.2, 0.12, `${pdfTitle()} | ${mainVisitHours()} man-hrs`);
   const sections = notecardSections();
   const lh = size=>size/72*1.28;
 
