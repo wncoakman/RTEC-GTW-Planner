@@ -144,7 +144,7 @@ const WORK_TASK_TYPES = [
   'Prune - Clearance (Structure/Utility)','Removal - Full Tree Removal','Removal - Partial / Hazard Limb',
   'Stump Grinding','Cabling / Bracing','Root Collar Excavation','PHC - Deep Root Fertilization',
   'PHC - Insect Treatment','PHC - Disease Treatment','PHC - Soil Injection / Amendment',
-  'Planting - New Tree Installation','Mulching','Haul Wood','Chip Debris / Haul Chips','Other (specify)'
+  'Planting - New Tree Installation','Mulching','Haul Wood','Chip Debris / Haul Chips'
 ];
 const ACCESS_ITEMS = [
   ['neighborPermission',"Neighbor's Written Permission"],
@@ -175,7 +175,7 @@ const SPECIES_OPTIONS = [
 ];
 const COLORS = ['#FF3B30','#FFCC00','#FFFFFF','#111111','#1A73E8','#34C759'];
 const ARBORISTS = ['Ian Bailey','Ziggy Zartman','Andy Ross','Jason Stoner','Riley Kemp','Chris Hamley','Corey Dalrymple'];
-const ARB_PREFS_KEY = 'rtecArboristPrefs';
+const ARB_PREFS_KEY = 'rtecArboristPrefs', TASK_PREFS_KEY = 'rtecTaskTypePrefs';
 
 /* ===================== State ===================== */
 let uidCounter = 1;
@@ -268,6 +268,7 @@ function normalizeState(s){
     tree.tasks = (Array.isArray(t.tasks) ? t.tasks : []).map(tk=>{
       const task = Object.assign(newTask(), tk);
       if(task.splitVisit) task.splitJob = true;
+      if(task.type==='Other (specify)'){ task.type = String(task.customType||'').trim() || 'Other'; task.customType = ''; }
       delete task.splitVisit;
       return task;
     });
@@ -392,62 +393,75 @@ function renderStepClient(){
       <label class="text-sm"><span class="block text-xs font-medium text-slate-500 mb-1">Date</span>
         <input data-bind="client.date" value="${esc(c.date)}" type="date" class="w-full border border-slate-300 rounded-lg px-3 py-2"></label>
       <div class="col-span-2 text-sm"><label for="arboristInput" class="block text-xs font-medium text-slate-500 mb-1">Arborist/ Sales Rep</label>
-        <div class="relative" id="arboristBox">
-          <input id="arboristInput" data-bind="client.arborist" value="${esc(c.arborist)}" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
-            placeholder="Pick or type a name" role="combobox" aria-expanded="false" aria-controls="arboristMenu" class="w-full border border-slate-300 rounded-lg pl-3 pr-10 py-2">
-          <button type="button" data-arb-toggle aria-label="Show names" class="absolute inset-y-0 right-0 w-10 flex items-center justify-center text-slate-500">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
-          <ul id="arboristMenu" role="listbox" style="scroll-margin-bottom:96px" class="hidden absolute z-20 left-0 right-0 mt-1 max-h-64 overflow-auto bg-white border border-slate-300 rounded-lg shadow-lg py-1"></ul>
-        </div></div>
+        ${comboHtml('arborist', 'client.arborist', c.arborist, { id:'arboristInput', placeholder:'Pick or type a name' })}</div>
     </div>
   </div>`;
 }
 
-/* ===================== Arborist / Sales Rep picker =====================
-   A text box with a dropdown of the standard names plus any names typed on this device before.
-   Typing filters the list. The last name used becomes the default for new jobs. Stored in
-   localStorage because it is a per-device preference, not part of the job. */
-function arboristPrefs(){
+/* ===================== Type-or-pick fields (Arborist/ Sales Rep, Work Task) =====================
+   A text box with a dropdown of standard choices plus anything typed on this device before.
+   Typing filters the list; a new entry is remembered and offered next time (✕ forgets it).
+   For the arborist, the last name used also becomes the default for new jobs. Stored in
+   localStorage because these are per-device preferences, not part of the job. */
+const COMBO_KINDS = {
+  arborist: { key: ARB_PREFS_KEY, defaults: ()=>ARBORISTS, rememberLast: true, noun: 'names' },
+  task: { key: TASK_PREFS_KEY, defaults: ()=>WORK_TASK_TYPES, rememberLast: false, noun: 'tasks' }
+};
+function comboPrefs(kind){
   try{
-    const p = JSON.parse(localStorage.getItem(ARB_PREFS_KEY)||'{}');
+    // Key looked up directly (not via COMBO_KINDS) because newState() runs before that is defined.
+    const p = JSON.parse(localStorage.getItem(kind==='arborist' ? ARB_PREFS_KEY : TASK_PREFS_KEY)||'{}');
     return { last: typeof p.last==='string' ? p.last : '', custom: Array.isArray(p.custom) ? p.custom.filter(n=>typeof n==='string' && n.trim()) : [] };
   }catch(e){ return { last:'', custom:[] }; }
 }
-function saveArboristPrefs(p){ try{ localStorage.setItem(ARB_PREFS_KEY, JSON.stringify(p)); }catch(e){} }
-function arboristNames(){
-  const names = ARBORISTS.slice();
-  arboristPrefs().custom.forEach(n=>{ if(!names.some(x=>x.toLowerCase()===n.toLowerCase())) names.push(n); });
+function saveComboPrefs(kind, p){ try{ localStorage.setItem(COMBO_KINDS[kind].key, JSON.stringify(p)); }catch(e){} }
+function comboNames(kind){
+  const names = COMBO_KINDS[kind].defaults().slice();
+  comboPrefs(kind).custom.forEach(n=>{ if(!names.some(x=>x.toLowerCase()===n.toLowerCase())) names.push(n); });
   return names;
 }
-/* Remember the name as the default, and add it to the list if it is new. */
-function commitArborist(){
-  const name = String(state.client.arborist||'').trim().replace(/\s+/g,' ');
-  if(!name) return;
-  const p = arboristPrefs();
-  const match = arboristNames().find(x=>x.toLowerCase()===name.toLowerCase());
-  if(!match) p.custom.push(name);
-  p.last = match || name;
-  saveArboristPrefs(p);
-  // Tidy the job's copy too ("ian  bailey" -> "Ian Bailey").
-  if(state.client.arborist!==p.last){
-    state.client.arborist = p.last; persist();
-    const input = document.getElementById('arboristInput'); if(input) input.value = p.last;
-  }
+function arboristPrefs(){ return comboPrefs('arborist'); }
+
+function comboHtml(kind, path, value, { id='', placeholder='Pick or type', cls='' } = {}){
+  return `<div class="relative" data-combo="${kind}">
+    <input ${id?`id="${id}"`:''} data-combo-input data-bind="${path}" value="${esc(value)}" autocomplete="off" autocorrect="off" autocapitalize="${kind==='arborist'?'words':'sentences'}" spellcheck="false"
+      placeholder="${esc(placeholder)}" role="combobox" aria-expanded="false" class="w-full border border-slate-300 rounded-lg pl-3 pr-10 py-2 ${cls}">
+    <button type="button" data-combo-toggle aria-label="Show ${COMBO_KINDS[kind].noun}" class="absolute inset-y-0 right-0 w-10 flex items-center justify-center text-slate-500">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
+    <ul data-combo-menu role="listbox" style="scroll-margin-bottom:96px" class="hidden absolute z-20 left-0 right-0 mt-1 max-h-64 overflow-auto bg-white border border-slate-300 rounded-lg shadow-lg py-1 text-sm"></ul>
+  </div>`;
 }
-function renderArboristMenu(showAll){
-  const menu = document.getElementById('arboristMenu'), input = document.getElementById('arboristInput');
-  if(!menu) return;
+/* Remember the entry (and, for the arborist, make it the default); tidy its case to match the list. */
+function commitCombo(input){
+  const box = input.closest('[data-combo]'); const kind = box ? box.dataset.combo : input.dataset.comboKind;
+  const path = input.getAttribute('data-bind');
+  const name = String(getPath(state, path)||'').trim().replace(/\s+/g,' ');
+  if(!kind || !name) return;
+  const p = comboPrefs(kind);
+  const match = comboNames(kind).find(x=>x.toLowerCase()===name.toLowerCase());
+  if(!match) p.custom.push(name);
+  if(COMBO_KINDS[kind].rememberLast) p.last = match || name;
+  saveComboPrefs(kind, p);
+  const tidy = match || name;
+  if(getPath(state, path)!==tidy){ setPath(state, path, tidy); persist(); input.value = tidy; }
+}
+function renderComboMenu(box, showAll){
+  const kind = box.dataset.combo, menu = box.querySelector('[data-combo-menu]'), input = box.querySelector('[data-combo-input]');
   const q = input.value.trim().toLowerCase();
-  const custom = new Set(arboristPrefs().custom.map(n=>n.toLowerCase()));
-  const all = arboristNames();
+  const custom = new Set(comboPrefs(kind).custom.map(n=>n.toLowerCase()));
+  const all = comboNames(kind);
   const exact = all.some(n=>n.toLowerCase()===q);
-  const names = (showAll || !q || exact) ? all : all.filter(n=>n.toLowerCase().includes(q));
-  if(!names.length){ closeArboristMenu(); return; }
+  // Predictive order: entries with a word starting with what's typed come first.
+  const wordStart = n=>n.toLowerCase().split(/[\s\/(-]+/).some(w=>w.startsWith(q));
+  const names = (showAll || !q || exact) ? all
+    : all.filter(n=>n.toLowerCase().includes(q)).sort((x,y)=>wordStart(y)-wordStart(x));
+  if(!names.length){ closeComboMenus(); return; }
+  closeComboMenus(box);
   menu.innerHTML = names.map(n=>{
     const cur = n.toLowerCase()===q;
     return `<li class="flex items-center ${cur?'bg-brand-light':''}">
-      <button type="button" role="option" aria-selected="${cur}" data-arb-opt="${esc(n)}" class="flex-1 text-left px-3 py-2.5 ${cur?'font-semibold text-brand-dark':''}">${esc(n)}</button>
-      ${custom.has(n.toLowerCase()) ? `<button type="button" data-arb-del="${esc(n)}" aria-label="Forget ${esc(n)}" class="px-3 py-2.5 text-slate-400 hover:text-red-600">✕</button>` : ''}
+      <button type="button" role="option" aria-selected="${cur}" data-combo-opt="${esc(n)}" class="flex-1 text-left px-3 py-2.5 ${cur?'font-semibold text-brand-dark':''}">${esc(n)}</button>
+      ${custom.has(n.toLowerCase()) ? `<button type="button" data-combo-del="${esc(n)}" aria-label="Forget ${esc(n)}" class="px-3 py-2.5 text-slate-400 hover:text-red-600">✕</button>` : ''}
     </li>`;
   }).join('');
   const wasHidden = menu.classList.contains('hidden');
@@ -456,19 +470,22 @@ function renderArboristMenu(showAll){
   // Make room below the field so the list can scroll clear of the fixed footer bar.
   if(wasHidden){ appRoot.style.paddingBottom = '22rem'; menu.scrollIntoView({block:'nearest'}); }
 }
-function closeArboristMenu(){
-  const menu = document.getElementById('arboristMenu');
-  if(menu) menu.classList.add('hidden');
-  appRoot.style.paddingBottom = '';
-  const input = document.getElementById('arboristInput');
-  if(input) input.setAttribute('aria-expanded','false');
+function closeComboMenus(except){
+  let anyOpen = false;
+  document.querySelectorAll('[data-combo]').forEach(box=>{
+    if(box===except) return;
+    const menu = box.querySelector('[data-combo-menu]');
+    if(!menu.classList.contains('hidden')){ menu.classList.add('hidden'); anyOpen = true; }
+    box.querySelector('[data-combo-input]').setAttribute('aria-expanded','false');
+  });
+  if(anyOpen && !except) appRoot.style.paddingBottom = '';
 }
-function pickArborist(name){
-  const input = document.getElementById('arboristInput');
-  input.value = name; state.client.arborist = name; persist();
-  commitArborist(); closeArboristMenu();
+function pickCombo(box, name){
+  const input = box.querySelector('[data-combo-input]');
+  input.value = name; setPath(state, input.getAttribute('data-bind'), name); persist();
+  commitCombo(input); closeComboMenus();
 }
-document.addEventListener('pointerdown', e=>{ if(!e.target.closest('#arboristBox')) closeArboristMenu(); });
+document.addEventListener('pointerdown', e=>{ const box = e.target.closest('[data-combo]'); closeComboMenus(box || undefined); if(!box) appRoot.style.paddingBottom = ''; });
 
 /* ===================== GPS capture =====================
    iOS only shows the location prompt when getCurrentPosition() runs directly inside a tap and the
@@ -750,10 +767,7 @@ function renderTaskCard(tree, ti, task, tj){
       <span class="text-xs font-semibold text-slate-500">Task ${label}</span>
       <button class="text-xs text-red-600" data-remove-task="${ti}" data-remove-task-idx="${tj}">Remove</button>
     </div>
-    <select data-bind="trees.${ti}.tasks.${tj}.type" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-      ${WORK_TASK_TYPES.map(opt=>`<option value="${esc(opt)}" ${task.type===opt?'selected':''}>${esc(opt)}</option>`).join('')}
-    </select>
-    ${task.type==='Other (specify)' ? `<input data-bind="trees.${ti}.tasks.${tj}.customType" value="${esc(task.customType)}" placeholder="Specify task" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">` : ''}
+    ${comboHtml('task', `trees.${ti}.tasks.${tj}.type`, task.type, { placeholder:'Pick or type a task', cls:'text-sm bg-white' })}
     <textarea data-bind="trees.${ti}.tasks.${tj}.details" rows="2" placeholder="Task details" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">${esc(task.details)}</textarea>
     <div class="grid grid-cols-2 gap-2">
       <label class="text-xs"><span class="block text-slate-500 mb-1">Est. Man-Hours</span>
@@ -971,19 +985,21 @@ appRoot.addEventListener('click', async e=>{
   const rmTask = e.target.closest('[data-remove-task]');
   if(rmTask){ const ti=Number(rmTask.dataset.removeTask), tj=Number(rmTask.dataset.removeTaskIdx); state.trees[ti].tasks.splice(tj,1); renderStepTrees(); persist(); return; }
 
-  if(e.target.closest('[data-arb-toggle]')){
-    const menu = document.getElementById('arboristMenu');
-    if(menu.classList.contains('hidden')) renderArboristMenu(true); else closeArboristMenu();
+  const comboToggle = e.target.closest('[data-combo-toggle]');
+  if(comboToggle){
+    const box = comboToggle.closest('[data-combo]');
+    if(box.querySelector('[data-combo-menu]').classList.contains('hidden')) renderComboMenu(box, true); else closeComboMenus();
     return;
   }
-  const arbOpt = e.target.closest('[data-arb-opt]');
-  if(arbOpt){ pickArborist(arbOpt.dataset.arbOpt); return; }
-  const arbDel = e.target.closest('[data-arb-del]');
-  if(arbDel){
-    const name = arbDel.dataset.arbDel.toLowerCase(), p = arboristPrefs();
+  const comboOpt = e.target.closest('[data-combo-opt]');
+  if(comboOpt){ pickCombo(comboOpt.closest('[data-combo]'), comboOpt.dataset.comboOpt); return; }
+  const comboDel = e.target.closest('[data-combo-del]');
+  if(comboDel){
+    const box = comboDel.closest('[data-combo]'), kind = box.dataset.combo;
+    const name = comboDel.dataset.comboDel.toLowerCase(), p = comboPrefs(kind);
     p.custom = p.custom.filter(n=>n.toLowerCase()!==name);
     if(p.last.toLowerCase()===name) p.last = '';
-    saveArboristPrefs(p); renderArboristMenu(true);
+    saveComboPrefs(kind, p); renderComboMenu(box, true);
     return;
   }
 
@@ -1066,15 +1082,17 @@ photoFileInput.addEventListener('change', async ()=>{
   renderStepTrees(); persist();
 });
 
-appRoot.addEventListener('input', e=>{ if(e.target.id==='arboristInput') renderArboristMenu(false); });
-appRoot.addEventListener('focusin', e=>{ if(e.target.id==='arboristInput') renderArboristMenu(true); });
+const comboOf = el=>el && el.matches && el.matches('[data-combo-input]') ? el.closest('[data-combo]') : null;
+appRoot.addEventListener('input', e=>{ const box = comboOf(e.target); if(box) renderComboMenu(box, false); });
+appRoot.addEventListener('focusin', e=>{ const box = comboOf(e.target); if(box) renderComboMenu(box, true); });
 appRoot.addEventListener('keydown', e=>{
-  if(e.target.id!=='arboristInput') return;
-  if(e.key==='Escape') closeArboristMenu();
-  else if(e.key==='Enter'){ e.preventDefault(); commitArborist(); closeArboristMenu(); e.target.blur(); }
+  if(!comboOf(e.target)) return;
+  if(e.key==='Escape') closeComboMenus();
+  else if(e.key==='Enter'){ e.preventDefault(); commitCombo(e.target); closeComboMenus(); e.target.blur(); }
 });
 appRoot.addEventListener('change', async e=>{
-  if(e.target.id==='arboristInput'){ setTimeout(commitArborist, 250); return; }
+  // Wait a moment so a tap on a list option lands before a half-typed entry is remembered.
+  if(comboOf(e.target)){ const input = e.target; setTimeout(()=>commitCombo(input), 250); return; }
   if(e.target.matches && e.target.matches('[data-gps-field]')){ onManualGpsChange(e.target); return; }
   const customLabel = e.target.closest('[data-custom-access-label]');
   if(customLabel){ state.accessPermits.custom[Number(customLabel.dataset.customAccessLabel)].label = customLabel.value; persist(); return; }
@@ -1929,7 +1947,7 @@ async function siteMapImage(){
 }
 
 /* ===================== PDF generation ===================== */
-function taskTypeLabel(task){ return task.type==='Other (specify)' ? (task.customType||'Other') : task.type; }
+function taskTypeLabel(task){ return (task.type==='Other (specify)' ? task.customType : String(task.type||'').trim()) || 'Unspecified task'; }
 
 /* Photo labels match the SingleOps inventory: "[SingleOps #]-1" for tree 1's photo, "[SingleOps #]-1a"
    for its task 1a. Without a SingleOps # they fall back to "Tree #1" and "1a". In the report text,
