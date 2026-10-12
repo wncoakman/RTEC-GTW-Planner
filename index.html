@@ -177,7 +177,7 @@ if('serviceWorker' in navigator && location.protocol!=='file:'){
 }
 
 /* Recent errors, kept in memory so a bug report can include them. */
-const APP_BUILD = '2026-10-11';
+const APP_BUILD = '2026-10-12';
 const errorLog = [];
 function logError(msg){ errorLog.push(`${new Date().toLocaleTimeString()} ${String(msg).slice(0, 200)}`); if(errorLog.length > 6) errorLog.shift(); }
 window.addEventListener('error', e=>logError(`${e.message} @${e.lineno||'?'}`));
