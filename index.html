@@ -46,7 +46,10 @@
       <h1 class="text-lg font-bold leading-tight">RTEC GTW Job Builder</h1>
       <p class="text-xs text-brand-light opacity-90" id="jobSubtitle">New Job</p>
     </div>
-    <button id="newJobBtn" class="text-xs bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg">New Job</button>
+    <div class="flex gap-2">
+      <button id="jobsBtn" class="text-xs bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg">Jobs</button>
+      <button id="newJobBtn" class="text-xs bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg">New Job</button>
+    </div>
   </div>
   <nav class="max-w-3xl mx-auto px-4 pb-3 flex items-center gap-2 text-xs" id="stepperNav"></nav>
 </header>
@@ -66,6 +69,24 @@
     <button id="nextBtn" class="px-4 py-2.5 rounded-lg bg-brand text-white font-semibold">Next</button>
   </div>
 </footer>
+
+<!-- ===================== Saved jobs ===================== -->
+<div id="jobsModal" class="fixed inset-0 z-40 bg-black/40 hidden flex items-end sm:items-center justify-center">
+  <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col" style="max-height:88vh;padding-bottom:env(safe-area-inset-bottom)">
+    <div class="flex items-center justify-between px-4 pt-4 pb-2">
+      <h2 class="text-base font-bold text-slate-800">Jobs on this device</h2>
+      <button id="jobsCloseBtn" class="w-8 h-8 rounded-full bg-slate-100 text-slate-600" aria-label="Close">✕</button>
+    </div>
+    <div class="px-4 pb-2">
+      <input id="jobsSearch" type="search" placeholder="Search client, SingleOps #, city" autocomplete="off" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    </div>
+    <ul id="jobsList" class="flex-1 overflow-auto px-2 pb-2 divide-y divide-slate-100"></ul>
+    <div class="border-t border-slate-200 px-4 py-3 space-y-2">
+      <button id="jobsNewBtn" class="w-full bg-brand text-white font-semibold rounded-lg py-2.5 text-sm">+ New Job</button>
+      <p id="jobsStorage" class="text-[11px] text-slate-400 text-center"></p>
+    </div>
+  </div>
+</div>
 
 <!-- ===================== Satellite pin placement ===================== -->
 <div id="mapModal" class="fixed inset-0 z-50 bg-black hidden flex flex-col">
@@ -182,8 +203,10 @@ let uidCounter = 1;
 function uid(){ return uidCounter++; }
 function newTask(){ return { id: uid(), type: WORK_TASK_TYPES[0], customType:'', details:'', hours:'', price:'', splitJob:false, photo:null }; }
 function newTree(){ return { id: uid(), mainPhoto:null, gps:{lat:'',lng:'',accuracy:''}, species:'', dbh:'', location:'', price:'', tasks:[newTask()], open:true }; }
+function newJobId(){ return 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function newState(){
   return {
+    jobId: newJobId(), createdAt: Date.now(), updatedAt: Date.now(),
     step: 0,
     client: { leadNum:'', city:'', name:'', phone:'', email:'', date:'', arborist: arboristPrefs().last, crewSize:'' },
     trees: [newTree()],
@@ -201,8 +224,11 @@ function newState(){
 }
 let state = newState();
 
-/* The job (including photo data URLs) lives in IndexedDB. localStorage caps out around 5MB,
-   which a single phone photo can exceed, so it is only read as a fallback for older saves. */
+/* Jobs (including photo data URLs) live in IndexedDB, one record per job under "job:<id>", plus a
+   small "jobIndex" summary list for the Jobs screen (so listing never loads photos) and
+   "currentId" for the job that was open last. localStorage caps out around 5MB, which a single
+   phone photo can exceed, so it is only read as a fallback for the oldest saves. Older versions
+   kept a single job under "current"; that is moved into the new layout on first load. */
 const DB_NAME = 'rtec-gtw-job-builder', DB_STORE = 'jobs', LEGACY_KEY = 'rtecGtwJob';
 let dbPromise = null;
 function openDb(){
@@ -225,21 +251,47 @@ async function idb(mode, fn){
     tx.onerror = tx.onabort = ()=>reject(tx.error);
   });
 }
+let jobIndex = []; // [{id, name, leadNum, city, date, trees, createdAt, updatedAt}]
+function jobSummary(s){
+  return { id: s.jobId, name: String(s.client.name||'').trim(), leadNum: String(s.client.leadNum||'').trim(),
+    city: String(s.client.city||'').trim(), date: s.client.date||'', trees: s.trees.length,
+    createdAt: s.createdAt||Date.now(), updatedAt: s.updatedAt||Date.now() };
+}
+/* "Edited" time only moves when the job's content changes, not when it is just opened or browsed. */
+let lastSavedSnapshot = '';
+function jobSnapshot(s){ return JSON.stringify(Object.assign({}, s, { step: 0, updatedAt: 0 })); }
 let saveFailedWarned = false;
 async function saveState(){
-  try{ await idb('readwrite', st=>st.put(JSON.parse(JSON.stringify(state)), 'current')); saveFailedWarned = false; }
-  catch(e){
+  const snap = jobSnapshot(state);
+  if(snap!==lastSavedSnapshot){ state.updatedAt = Date.now(); lastSavedSnapshot = snap; }
+  const sum = jobSummary(state);
+  jobIndex = [sum, ...jobIndex.filter(j=>j.id!==sum.id)];
+  try{
+    const copy = JSON.parse(JSON.stringify(state));
+    await idb('readwrite', st=>{ st.put(copy, 'job:'+state.jobId); st.put(jobIndex, 'jobIndex'); return st.put(state.jobId, 'currentId'); });
+    saveFailedWarned = false;
+  }catch(e){
     console.error('Save failed', e);
     if(!saveFailedWarned){ saveFailedWarned = true; toast('Warning: job could not be saved on this device. Export before closing.'); }
   }
 }
+async function readJob(id){
+  try{ const s = await idb('readonly', st=>st.get('job:'+id)); return s ? normalizeState(s) : null; }catch(e){ return null; }
+}
 async function loadState(){
-  let s = null;
-  try{ s = await idb('readonly', st=>st.get('current')); }catch(e){}
-  if(!s){ try{ const raw = localStorage.getItem(LEGACY_KEY); if(raw) s = JSON.parse(raw); }catch(e){} }
+  try{ jobIndex = (await idb('readonly', st=>st.get('jobIndex'))) || []; }catch(e){ jobIndex = []; }
+  let s = null, migrated = false;
+  try{ const id = await idb('readonly', st=>st.get('currentId')); if(id) s = await idb('readonly', st=>st.get('job:'+id)); }catch(e){}
+  if(!s){ try{ s = await idb('readonly', st=>st.get('current')); migrated = !!s; }catch(e){} }
+  if(!s){ try{ const raw = localStorage.getItem(LEGACY_KEY); if(raw){ s = JSON.parse(raw); migrated = true; } }catch(e){} }
   if(!s) return null;
   s = normalizeState(s);
   uidCounter = 1 + Math.max(0, ...collectIds(s));
+  lastSavedSnapshot = jobSnapshot(s);
+  if(migrated){
+    state = s; await saveState();
+    try{ await idb('readwrite', st=>st.delete('current')); }catch(e){}
+  }
   return s;
 }
 /* Fill in any fields missing from an older save so rendering never hits undefined. */
@@ -959,9 +1011,7 @@ document.getElementById('stepperNav').addEventListener('click', e=>{
 });
 backBtn.addEventListener('click', ()=>{ if(state.step>0){ state.step--; render(); } });
 nextBtn.addEventListener('click', ()=>{ if(state.step<STEPS.length-1){ state.step++; render(); } });
-document.getElementById('newJobBtn').addEventListener('click', ()=>{
-  if(confirm('Start a new job? This clears all current data.')){ state = newState(); uidCounter=1; saveState(); render(); }
-});
+document.getElementById('newJobBtn').addEventListener('click', ()=>startNewJob());
 
 appRoot.addEventListener('click', async e=>{
   const toggle = e.target.closest('[data-tree-toggle]');
@@ -2415,9 +2465,143 @@ async function generateAndDownloadZip(btn){
   });
 }
 
+/* ===================== Saved jobs =====================
+   Every job stays on the device. The Jobs screen lists them (newest first) to reopen, copy or delete. */
+const jobsModal = document.getElementById('jobsModal');
+const jobsList = document.getElementById('jobsList');
+const jobsSearch = document.getElementById('jobsSearch');
+
+/* Clear per-job screen state (open panels, GPS messages, running captures) before switching jobs. */
+function resetSessionUi(){
+  gpsSessions.forEach(s=>s.stop(true));
+  gpsStatus.clear(); gpsManualOpen.clear(); expandedPhotos.clear(); accessOpen.clear();
+  closeComboMenus();
+}
+/* A job nobody has typed anything into; these are dropped rather than cluttering the Jobs list. */
+function isBlankJob(s){
+  const c = s.client;
+  if(c.name || c.leadNum || c.city || c.phone || c.email || c.date || s.workPlan || s.safety) return false;
+  return s.trees.length===1 && !s.trees[0].species && !s.trees[0].mainPhoto && !s.trees[0].gps.lat && !s.trees[0].price
+    && s.trees[0].tasks.every(t=>!t.details && !t.hours && !t.price && !t.photo);
+}
+function switchToJob(s){
+  resetSessionUi();
+  const prev = state;
+  if(prev && prev.jobId!==s.jobId && isBlankJob(prev)){
+    jobIndex = jobIndex.filter(j=>j.id!==prev.jobId);
+    idb('readwrite', st=>{ st.delete('job:'+prev.jobId); return st.put(jobIndex, 'jobIndex'); }).catch(()=>{});
+  }
+  state = s;
+  uidCounter = 1 + Math.max(0, ...collectIds(s));
+  lastSavedSnapshot = jobSnapshot(s);
+  saveState(); render(); window.scrollTo(0, 0);
+}
+async function startNewJob(){
+  flushSave();
+  switchToJob(newState());
+  closeJobs();
+  toast('New job started. Earlier jobs are under Jobs.');
+}
+function relativeTime(t){
+  const m = Math.round((Date.now()-t)/60000);
+  if(m < 1) return 'just now';
+  if(m < 60) return `${m} min ago`;
+  const h = Math.round(m/60); if(h < 24) return `${h} hr ago`;
+  const d = Math.round(h/24); if(d < 30) return `${d} day${d>1?'s':''} ago`;
+  return new Date(t).toLocaleDateString();
+}
+function renderJobsList(){
+  const q = jobsSearch.value.trim().toLowerCase();
+  const jobs = jobIndex.slice().sort((a,b)=>b.updatedAt-a.updatedAt)
+    .filter(j=>!q || [j.name, j.leadNum, j.city, formatInspectionDate(j.date)].some(v=>String(v||'').toLowerCase().includes(q)));
+  if(!jobs.length){
+    jobsList.innerHTML = `<li class="text-sm text-slate-400 text-center py-8">${q ? 'No jobs match.' : 'No saved jobs yet.'}</li>`;
+    return;
+  }
+  jobsList.innerHTML = jobs.map(j=>{
+    const cur = j.id===state.jobId;
+    const line2 = [j.leadNum && 'SingleOps # '+j.leadNum, j.date && formatInspectionDate(j.date), `${j.trees} tree${j.trees===1?'':'s'}`].filter(Boolean).join(' · ');
+    return `<li class="flex items-center gap-1 py-1">
+      <button class="flex-1 min-w-0 text-left px-2 py-2 rounded-lg hover:bg-slate-50 ${cur?'bg-brand-light':''}" data-job-open="${j.id}">
+        <span class="block text-sm font-semibold text-slate-800 truncate">${esc(j.name || 'Unnamed job')}${j.city ? ' — '+esc(j.city.toUpperCase()) : ''}</span>
+        <span class="block text-xs text-slate-500 truncate">${cur ? '<span class="text-[10px] font-bold text-white bg-brand rounded px-1.5 py-px mr-1">OPEN</span>' : ''}${esc(line2)}</span>
+        <span class="block text-[11px] text-slate-400">Edited ${esc(relativeTime(j.updatedAt))}</span>
+      </button>
+      <button class="text-xs font-medium text-slate-600 bg-slate-100 rounded-lg px-2.5 py-2" data-job-copy="${j.id}" title="Start a new job from a copy of this one">Copy</button>
+      <button class="text-xs font-medium text-red-600 bg-red-50 rounded-lg px-2.5 py-2" data-job-delete="${j.id}">Delete</button>
+    </li>`;
+  }).join('');
+}
+async function showStorageUse(){
+  const el = document.getElementById('jobsStorage');
+  el.textContent = `${jobIndex.length} job${jobIndex.length===1?'':'s'} saved on this device. Export a ZIP to keep a permanent copy.`;
+  try{
+    const est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null;
+    if(est && est.usage >= 1048576) el.textContent += ` Using ${(est.usage/1048576).toFixed(0)} MB.`;
+  }catch(e){}
+}
+function openJobs(){
+  flushSave();
+  // Make sure the open job is in the list even if it has not been saved yet this session.
+  if(!jobIndex.some(j=>j.id===state.jobId)) jobIndex.unshift(jobSummary(state));
+  else jobIndex = jobIndex.map(j=>j.id===state.jobId ? jobSummary(state) : j);
+  jobsSearch.value = '';
+  renderJobsList(); showStorageUse();
+  jobsModal.classList.remove('hidden');
+}
+function closeJobs(){ jobsModal.classList.add('hidden'); }
+
+document.getElementById('jobsBtn').addEventListener('click', openJobs);
+document.getElementById('jobsCloseBtn').addEventListener('click', closeJobs);
+document.getElementById('jobsNewBtn').addEventListener('click', startNewJob);
+jobsModal.addEventListener('click', e=>{ if(e.target===jobsModal) closeJobs(); });
+jobsSearch.addEventListener('input', renderJobsList);
+jobsList.addEventListener('click', async e=>{
+  const open = e.target.closest('[data-job-open]');
+  if(open){
+    const id = open.dataset.jobOpen;
+    if(id!==state.jobId){
+      flushSave();
+      const s = await readJob(id);
+      if(!s){ toast('That job could not be loaded.'); jobIndex = jobIndex.filter(j=>j.id!==id); renderJobsList(); return; }
+      switchToJob(s);
+    }
+    closeJobs(); return;
+  }
+  const copy = e.target.closest('[data-job-copy]');
+  if(copy){
+    flushSave();
+    const src = copy.dataset.jobCopy===state.jobId ? normalizeState(JSON.parse(JSON.stringify(state))) : await readJob(copy.dataset.jobCopy);
+    if(!src){ toast('That job could not be loaded.'); return; }
+    Object.assign(src, { jobId: newJobId(), createdAt: Date.now(), updatedAt: Date.now(), step: 0 });
+    src.client.name = (src.client.name ? src.client.name+' ' : '') + '(copy)';
+    switchToJob(src); closeJobs();
+    toast('Copied. Edit anything that differs for this job.');
+    return;
+  }
+  const del = e.target.closest('[data-job-delete]');
+  if(del){
+    const id = del.dataset.jobDelete, j = jobIndex.find(x=>x.id===id);
+    if(!confirm(`Delete the job "${(j && j.name) || 'Unnamed job'}" from this device? This can't be undone. Export a ZIP first if you need it.`)) return;
+    jobIndex = jobIndex.filter(x=>x.id!==id);
+    try{ await idb('readwrite', st=>{ st.delete('job:'+id); return st.put(jobIndex, 'jobIndex'); }); }catch(e){}
+    if(id===state.jobId){
+      // Open the next most recent job, or a fresh one if none are left.
+      const next = jobIndex.slice().sort((a,b)=>b.updatedAt-a.updatedAt)[0];
+      const s = next ? await readJob(next.id) : null;
+      switchToJob(s || newState());
+    }
+    renderJobsList(); showStorageUse();
+    return;
+  }
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !jobsModal.classList.contains('hidden')) closeJobs(); });
+
 /* ===================== Init ===================== */
 (async function init(){
   document.getElementById('speciesList').innerHTML = SPECIES_OPTIONS.map(s=>`<option value="${esc(s)}">`).join('');
+  // Ask the browser not to clear saved jobs to free space (Safari may otherwise drop site data).
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
   const saved = await loadState();
   if(saved) state = saved;
   render();
