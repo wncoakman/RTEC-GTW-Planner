@@ -41,14 +41,15 @@
 <body class="bg-slate-50 text-slate-800 font-sans">
 
 <header class="bg-brand text-white sticky top-0 z-30 shadow">
-  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-    <div>
-      <h1 class="text-lg font-bold leading-tight">RTEC GTW Job Builder</h1>
-      <p class="text-xs text-brand-light opacity-90" id="jobSubtitle">New Job</p>
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+    <div class="min-w-0">
+      <h1 class="text-base sm:text-lg font-bold leading-tight truncate">RTEC GTW Job Builder</h1>
+      <p class="text-xs text-brand-light opacity-90 truncate" id="jobSubtitle">New Job</p>
     </div>
-    <div class="flex gap-2">
-      <button id="jobsBtn" class="text-xs bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg">Jobs</button>
-      <button id="newJobBtn" class="text-xs bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg">New Job</button>
+    <div class="flex gap-1.5 shrink-0">
+      <button id="bugBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2 py-1.5 rounded-lg" aria-label="Report a problem" title="Report a problem">🐞</button>
+      <button id="jobsBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2.5 py-1.5 rounded-lg whitespace-nowrap">Jobs</button>
+      <button id="newJobBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2.5 py-1.5 rounded-lg whitespace-nowrap">New Job</button>
     </div>
   </div>
   <nav class="max-w-3xl mx-auto px-4 pb-3 flex items-center gap-2 text-xs" id="stepperNav"></nav>
@@ -69,6 +70,22 @@
     <button id="nextBtn" class="px-4 py-2.5 rounded-lg bg-brand text-white font-semibold">Next</button>
   </div>
 </footer>
+
+<!-- ===================== Bug report ===================== -->
+<div id="bugModal" class="fixed inset-0 z-40 bg-black/40 hidden flex items-end sm:items-center justify-center">
+  <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-4 space-y-3" style="padding-bottom:max(1rem, env(safe-area-inset-bottom))">
+    <div class="flex items-center justify-between">
+      <h2 class="text-base font-bold text-slate-800">Report a problem</h2>
+      <button id="bugCloseBtn" class="w-8 h-8 rounded-full bg-slate-100 text-slate-600" aria-label="Close">✕</button>
+    </div>
+    <textarea id="bugText" rows="5" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+      placeholder="What happened? What were you doing, and what did you expect? Ideas and suggestions are welcome too."></textarea>
+    <label class="flex items-start gap-2 text-xs text-slate-600"><input type="checkbox" id="bugIncludeJob" checked class="mt-0.5">
+      Include this job's SingleOps #, client and city (no photos or prices)</label>
+    <button id="bugSendBtn" class="w-full bg-brand text-white font-semibold rounded-lg py-2.5 text-sm">Open email to send</button>
+    <p class="text-[11px] text-slate-400">Opens your email app with the report filled in; just tap Send. Device and app details are added to help track the problem down. With no signal, it waits in your Outbox.</p>
+  </div>
+</div>
 
 <!-- ===================== Saved jobs ===================== -->
 <div id="jobsModal" class="fixed inset-0 z-40 bg-black/40 hidden flex items-end sm:items-center justify-center">
@@ -157,6 +174,15 @@
 if('serviceWorker' in navigator && location.protocol!=='file:'){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
 }
+
+/* Recent errors, kept in memory so a bug report can include them. */
+const APP_BUILD = '2026-10-11';
+const errorLog = [];
+function logError(msg){ errorLog.push(`${new Date().toLocaleTimeString()} ${String(msg).slice(0, 200)}`); if(errorLog.length > 6) errorLog.shift(); }
+window.addEventListener('error', e=>logError(`${e.message} @${e.lineno||'?'}`));
+window.addEventListener('unhandledrejection', e=>logError('Promise: ' + ((e.reason && (e.reason.message || e.reason)) || 'unknown')));
+const consoleError = console.error.bind(console);
+console.error = (...a)=>{ logError(a.map(x=>x && x.message ? x.message : String(x)).join(' ')); consoleError(...a); };
 
 /* ===================== Constants ===================== */
 const WORK_TASK_TYPES = [
@@ -2596,6 +2622,37 @@ jobsList.addEventListener('click', async e=>{
   }
 });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !jobsModal.classList.contains('hidden')) closeJobs(); });
+
+/* ===================== Bug report =====================
+   No server: the report opens as a pre-filled email in the device's mail app. */
+const BUG_REPORT_EMAIL = 'wncoakman@gmail.com';
+const bugModal = document.getElementById('bugModal');
+function bugReportBody(text, includeJob){
+  const c = state.client;
+  const lines = [String(text||'').trim() || '(no description)', '', '---- details ----',
+    `App build: ${APP_BUILD}`,
+    `When: ${new Date().toLocaleString()}`,
+    `Screen: ${STEPS[state.step]} · ${state.trees.length} tree(s) · ${state.trees.reduce((n,t)=>n+t.tasks.length,0)} task(s)`,
+    `Device: ${navigator.userAgent}`,
+    `Window: ${window.innerWidth}x${window.innerHeight} · ${IS_STANDALONE ? 'home-screen app' : 'browser'} · ${navigator.onLine ? 'online' : 'offline'} · ${window.isSecureContext ? 'https' : 'not secure'}`];
+  if(includeJob) lines.push(`Job: SingleOps # ${c.leadNum||'-'} · ${c.name||'-'} · ${(c.city||'-').toUpperCase()}`);
+  if(errorLog.length) lines.push('Recent errors:', ...errorLog.map(e=>'  '+e));
+  return lines.join('\n');
+}
+function bugMailto(text, includeJob){
+  const subject = `GTW Job Builder problem report${state.client.leadNum && includeJob ? ' (SingleOps # '+state.client.leadNum+')' : ''}`;
+  return `mailto:${BUG_REPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bugReportBody(text, includeJob).replace(/\n/g, '\r\n'))}`;
+}
+document.getElementById('bugBtn').addEventListener('click', ()=>{ bugModal.classList.remove('hidden'); document.getElementById('bugText').focus(); });
+document.getElementById('bugCloseBtn').addEventListener('click', ()=>bugModal.classList.add('hidden'));
+bugModal.addEventListener('click', e=>{ if(e.target===bugModal) bugModal.classList.add('hidden'); });
+document.getElementById('bugSendBtn').addEventListener('click', ()=>{
+  const ta = document.getElementById('bugText');
+  if(!ta.value.trim()){ ta.focus(); toast('Add a short description first.'); return; }
+  window.location.href = bugMailto(ta.value, document.getElementById('bugIncludeJob').checked);
+  bugModal.classList.add('hidden'); ta.value = '';
+  toast('Report opened in your email app. Tap Send.');
+});
 
 /* ===================== Init ===================== */
 (async function init(){
