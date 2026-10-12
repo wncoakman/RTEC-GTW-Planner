@@ -43,10 +43,11 @@
 <header class="bg-brand text-white sticky top-0 z-30 shadow">
   <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
     <div class="min-w-0">
-      <h1 class="text-base sm:text-lg font-bold leading-tight truncate">RTEC GTW Job Builder</h1>
+      <h1 class="text-base sm:text-lg font-bold leading-tight truncate"><span class="hidden sm:inline">RTEC </span>GTW Job Builder</h1>
       <p class="text-xs text-brand-light opacity-90 truncate" id="jobSubtitle">New Job</p>
     </div>
     <div class="flex gap-1.5 shrink-0">
+      <button id="updateBtn" class="relative text-base leading-none bg-white/15 hover:bg-white/25 px-2 py-1.5 rounded-lg" aria-label="Check for updates" title="Check for updates">⟳<span id="updateDot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-brand"></span></button>
       <button id="bugBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2 py-1.5 rounded-lg" aria-label="Report a problem" title="Report a problem">🐞</button>
       <button id="jobsBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2.5 py-1.5 rounded-lg whitespace-nowrap">Jobs</button>
       <button id="newJobBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2.5 py-1.5 rounded-lg whitespace-nowrap">New Job</button>
@@ -2623,6 +2624,59 @@ jobsList.addEventListener('click', async e=>{
 });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !jobsModal.classList.contains('hidden')) closeJobs(); });
 
+/* ===================== Update button =====================
+   The service worker serves the app from its cache, so a new release normally appears only after
+   the app is closed and reopened. This checks the published version and, if it is newer, installs
+   it and reloads straight away. The open job is saved first. */
+const CACHE_PREFIX = 'rtec-gtw-builder-';
+async function installedVersion(){
+  try{ return (await caches.keys()).filter(k=>k.startsWith(CACHE_PREFIX)).sort().pop() || ''; }catch(e){ return ''; }
+}
+async function publishedVersion(){
+  const res = await fetch('sw.js?check=' + Date.now(), { cache: 'no-store' });
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const m = (await res.text()).match(/CACHE_VERSION\s*=\s*'([^']+)'/);
+  return m ? m[1] : '';
+}
+const versionLabel = v=>(v||'').replace(CACHE_PREFIX, '') || 'unknown';
+let installedVersionCache = '';
+installedVersion().then(v=>{ installedVersionCache = v; });
+function waitForNewWorker(ms){
+  return new Promise(resolve=>{
+    const t = setTimeout(resolve, ms);
+    navigator.serviceWorker.addEventListener('controllerchange', ()=>{ clearTimeout(t); resolve(); }, { once: true });
+  });
+}
+async function forceUpdate(){
+  const btn = document.getElementById('updateBtn');
+  if(!navigator.onLine){ toast("You're offline. Connect to the internet to update."); return; }
+  btn.disabled = true; btn.classList.add('animate-spin');
+  try{
+    flushSave(); await saveState();
+    if(!('serviceWorker' in navigator) || location.protocol==='file:'){ location.reload(); return; }
+    const [latest, current] = await Promise.all([publishedVersion(), installedVersion()]);
+    if(latest && latest===current){ toast(`You have the latest version (${versionLabel(current)}).`); return; }
+    toast(`Updating to ${versionLabel(latest)}…`);
+    const reg = await navigator.serviceWorker.getRegistration();
+    if(reg){ const waiting = waitForNewWorker(20000); await reg.update(); await waiting; }
+    location.reload();
+  }catch(e){
+    console.error('Update check failed', e);
+    toast("Couldn't reach the update server. Try again when you have signal.");
+  }finally{ btn.disabled = false; btn.classList.remove('animate-spin'); }
+}
+/* Quietly flag the button when a newer version is published. */
+async function flagUpdateAvailable(){
+  if(!navigator.onLine || !('caches' in window)) return;
+  try{
+    const [latest, current] = await Promise.all([publishedVersion(), installedVersion()]);
+    const newer = latest && current && latest!==current;
+    document.getElementById('updateDot').classList.toggle('hidden', !newer);
+    document.getElementById('updateBtn').title = newer ? `Update available (${versionLabel(latest)})` : `Check for updates (installed: ${versionLabel(current)})`;
+  }catch(e){}
+}
+document.getElementById('updateBtn').addEventListener('click', forceUpdate);
+
 /* ===================== Bug report =====================
    No server: the report opens as a pre-filled email in the device's mail app. */
 const BUG_REPORT_EMAIL = 'wncoakman@gmail.com';
@@ -2630,7 +2684,7 @@ const bugModal = document.getElementById('bugModal');
 function bugReportBody(text, includeJob){
   const c = state.client;
   const lines = [String(text||'').trim() || '(no description)', '', '---- details ----',
-    `App build: ${APP_BUILD}`,
+    `App build: ${APP_BUILD} (${versionLabel(installedVersionCache)})`,
     `When: ${new Date().toLocaleString()}`,
     `Screen: ${STEPS[state.step]} · ${state.trees.length} tree(s) · ${state.trees.reduce((n,t)=>n+t.tasks.length,0)} task(s)`,
     `Device: ${navigator.userAgent}`,
@@ -2662,6 +2716,7 @@ document.getElementById('bugSendBtn').addEventListener('click', ()=>{
   const saved = await loadState();
   if(saved) state = saved;
   render();
+  setTimeout(flagUpdateAvailable, 3000);
 })();
 </script>
 </body>

@@ -40,11 +40,12 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION).then(async (cache) => {
       // Same-origin files: must all succeed, or the shell is broken.
-      await cache.addAll(SAME_ORIGIN_URLS);
+      // cache: 'reload' skips the browser's HTTP cache, so an update never installs stale files.
+      await cache.addAll(SAME_ORIGIN_URLS.map((url) => new Request(url, { cache: 'reload' })));
       // Cross-origin CDN files: best-effort, one failure shouldn't block install.
       await Promise.allSettled(
         CDN_URLS.map((url) =>
-          fetch(url, { mode: 'cors' })
+          fetch(url, { mode: 'cors', cache: 'reload' })
             .then((res) => {
               if (res && res.ok) return cache.put(url, res);
             })
@@ -72,6 +73,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   // Satellite map tiles go straight to the network; caching them would fill the phone's storage.
   if (url.hostname === 'server.arcgisonline.com') return;
+  // The app's update check reads sw.js fresh; never answer it from (or store it in) the cache.
+  if (url.origin === self.location.origin && url.pathname.endsWith('/sw.js')) return;
 
   const isSameOrigin = url.origin === self.location.origin;
 
