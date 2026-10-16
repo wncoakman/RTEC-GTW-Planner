@@ -41,12 +41,12 @@
 <body class="bg-slate-50 text-slate-800 font-sans">
 
 <header class="bg-brand text-white sticky top-0 z-30 shadow">
-  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+  <div class="max-w-3xl mx-auto px-4 pb-4 flex items-start justify-between gap-2" style="padding-top:max(1.5rem, calc(env(safe-area-inset-top) + 0.9rem))">
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold leading-tight truncate"><span class="hidden sm:inline">RTEC </span>GTW Job Builder</h1>
       <p class="text-xs text-brand-light opacity-90 truncate" id="jobSubtitle">New Job</p>
     </div>
-    <div class="flex gap-1.5 shrink-0">
+    <div class="flex gap-1.5 shrink-0 mt-7">
       <button id="updateBtn" class="relative text-base leading-none bg-white/15 hover:bg-white/25 px-2 py-1.5 rounded-lg" aria-label="Check for updates" title="Check for updates">⟳<span id="updateDot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-brand"></span></button>
       <button id="bugBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2 py-1.5 rounded-lg" aria-label="Report a problem" title="Report a problem">🐞</button>
       <button id="jobsBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2.5 py-1.5 rounded-lg whitespace-nowrap">Jobs</button>
@@ -177,7 +177,7 @@ if('serviceWorker' in navigator && location.protocol!=='file:'){
 }
 
 /* Recent errors, kept in memory so a bug report can include them. */
-const APP_BUILD = '2026-10-12';
+const APP_BUILD = '2026-10-16';
 const errorLog = [];
 function logError(msg){ errorLog.push(`${new Date().toLocaleTimeString()} ${String(msg).slice(0, 200)}`); if(errorLog.length > 6) errorLog.shift(); }
 window.addEventListener('error', e=>logError(`${e.message} @${e.lineno||'?'}`));
@@ -223,13 +223,20 @@ const SPECIES_OPTIONS = [
 ];
 const COLORS = ['#FF3B30','#FFCC00','#FFFFFF','#111111','#1A73E8','#34C759'];
 const ARBORISTS = ['Ian Bailey','Ziggy Zartman','Andy Ross','Jason Stoner','Riley Kemp','Chris Hamley','Corey Dalrymple'];
-const ARB_PREFS_KEY = 'rtecArboristPrefs', TASK_PREFS_KEY = 'rtecTaskTypePrefs';
+const ARB_PREFS_KEY = 'rtecArboristPrefs', TASK_PREFS_KEY = 'rtecTaskTypePrefs', PHC_PREFS_KEY = 'rtecPhcTypePrefs';
+const PHC_TASK_TYPES = ['Targeted Application','Bio-Stim','Root Care','Invasive Control','Stump Kill'];
+const PROPOSAL_STATUSES = ['Included','Recommended','Optional'];
 
 /* ===================== State ===================== */
 let uidCounter = 1;
 function uid(){ return uidCounter++; }
-function newTask(){ return { id: uid(), type: WORK_TASK_TYPES[0], customType:'', details:'', hours:'', price:'', splitJob:false, photo:null }; }
-function newTree(){ return { id: uid(), mainPhoto:null, gps:{lat:'',lng:'',accuracy:''}, species:'', dbh:'', location:'', price:'', tasks:[newTask()], open:true }; }
+function newTask(){ return { id: uid(), type: WORK_TASK_TYPES[0], customType:'', details:'', hours:'', price:'', splitJob:false, proposalStatus:'Included', photos:[] }; }
+function newTree(){ return { id: uid(), photos:[], gps:{lat:'',lng:'',accuracy:''}, species:'', dbh:'', location:'', price:'', tasks:[newTask()], open:true }; }
+/* Work tasks that apply to several trees at once (e.g. a site-wide mulching pass), and PHC
+   (plant health care) tasks; both live at the job level, not nested in a single tree, and are
+   tagged with the ids of whichever trees in the inventory they apply to. */
+function newMultiTreeTask(){ return { id: uid(), type: WORK_TASK_TYPES[0], customType:'', details:'', hours:'', price:'', proposalStatus:'Included', photos:[], treeIds:[] }; }
+function newPhcTask(){ return { id: uid(), type: PHC_TASK_TYPES[0], customType:'', details:'', hours:'', price:'', proposalStatus:'Included', photos:[], treeIds:[] }; }
 function newJobId(){ return 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function newState(){
   return {
@@ -237,6 +244,8 @@ function newState(){
     step: 0,
     client: { leadNum:'', city:'', name:'', phone:'', email:'', date:'', arborist: arboristPrefs().last, crewSize:'' },
     trees: [newTree()],
+    multiTreeTasks: [],
+    phcTasks: [],
     equipment: {
       bucketTruck:'None', chipper:'None', chipTruck:'None', extraChipTruck:'No',
       crane:{ needed:false, spec:'', price:'' },
@@ -244,6 +253,7 @@ function newState(){
       spyderLift:{ needed:false, price:'' }
     },
     workPlan: '',
+    workPlanPhotos: [],
     safety: '',
     accessPermits: { standard:{ neighborPermission:false,dominion:false,pepco:false,parkingPermits:false,missUtility:false,ddotRemoval:false,trafficControl:false }, details:{}, custom:[] },
     notes: { crew:'', client:'', internal:'', scheduling:'' }
@@ -321,6 +331,15 @@ async function loadState(){
   }
   return s;
 }
+/* A job's photos are stored as arrays (unlimited per tree/task/section). Older saves kept a single
+   photo under "mainPhoto" or "photo"; that legacy value becomes the first entry in the array. */
+function normalizePhotos(photos, legacySingle){
+  const arr = Array.isArray(photos) ? photos.slice() : [];
+  if(!arr.length && legacySingle && legacySingle.originalDataUrl) arr.push(legacySingle);
+  return arr.filter(p=>p && p.originalDataUrl).map(p=>({
+    originalDataUrl: p.originalDataUrl, editedDataUrl: p.editedDataUrl||null, shapes: Array.isArray(p.shapes) ? p.shapes : []
+  }));
+}
 /* Fill in any fields missing from an older save so rendering never hits undefined. */
 function normalizeState(s){
   const d = newState();
@@ -341,17 +360,34 @@ function normalizeState(s){
     if(!out.accessPermits.details.trafficControl) out.accessPermits.details.trafficControl = out.notes.trafficControl;
   }
   delete out.notes.trafficControl;
+  out.workPlanPhotos = normalizePhotos(s.workPlanPhotos);
   out.trees = (Array.isArray(s.trees) && s.trees.length ? s.trees : [newTree()]).map(t=>{
     const tree = Object.assign(newTree(), t);
     tree.gps = Object.assign({lat:'',lng:'',accuracy:''}, t.gps);
+    tree.photos = normalizePhotos(t.photos, t.mainPhoto);
+    delete tree.mainPhoto;
     tree.tasks = (Array.isArray(t.tasks) ? t.tasks : []).map(tk=>{
       const task = Object.assign(newTask(), tk);
       if(task.splitVisit) task.splitJob = true;
       if(task.type==='Other (specify)'){ task.type = String(task.customType||'').trim() || 'Other'; task.customType = ''; }
-      delete task.splitVisit;
+      task.photos = normalizePhotos(tk.photos, tk.photo);
+      delete task.photo; delete task.splitVisit;
       return task;
     });
     return tree;
+  });
+  const validTreeId = id=>out.trees.some(tr=>tr.id===id);
+  out.multiTreeTasks = (Array.isArray(s.multiTreeTasks) ? s.multiTreeTasks : []).map(t=>{
+    const task = Object.assign(newMultiTreeTask(), t);
+    task.photos = normalizePhotos(t.photos);
+    task.treeIds = Array.isArray(t.treeIds) ? t.treeIds.filter(validTreeId) : [];
+    return task;
+  });
+  out.phcTasks = (Array.isArray(s.phcTasks) ? s.phcTasks : []).map(t=>{
+    const task = Object.assign(newPhcTask(), t);
+    task.photos = normalizePhotos(t.photos);
+    task.treeIds = Array.isArray(t.treeIds) ? t.treeIds.filter(validTreeId) : [];
+    return task;
   });
   out.step = Math.min(Math.max(0, Number(out.step)||0), 3);
   return out;
@@ -359,6 +395,8 @@ function normalizeState(s){
 function collectIds(s){
   const ids=[];
   (s.trees||[]).forEach(t=>{ ids.push(Number(t.id)||0); (t.tasks||[]).forEach(tk=>ids.push(Number(tk.id)||0)); });
+  (s.multiTreeTasks||[]).forEach(t=>ids.push(Number(t.id)||0));
+  (s.phcTasks||[]).forEach(t=>ids.push(Number(t.id)||0));
   return ids;
 }
 let debounceTimer=null;
@@ -435,14 +473,19 @@ function updateSubtitle(){
 function render(){
   updateSubtitle();
   renderStepper();
-  if(state.step===0) renderStepClient();
-  else if(state.step===1) renderStepTrees();
-  else if(state.step===2) renderStepLogistics();
-  else renderStepGenerate();
+  renderCurrentStep();
   backBtn.disabled = state.step===0;
   nextBtn.textContent = state.step===STEPS.length-1 ? 'Done' : 'Next';
   nextBtn.style.visibility = state.step===STEPS.length-1 ? 'hidden' : 'visible';
   persist();
+}
+/* Re-draws just the current step's content (not the stepper/footer) so handlers that mutate data
+   outside the Trees step (e.g. Work Plan photos in Logistics) redraw the right screen. */
+function renderCurrentStep(){
+  if(state.step===0) renderStepClient();
+  else if(state.step===1) renderStepTrees();
+  else if(state.step===2) renderStepLogistics();
+  else renderStepGenerate();
 }
 function renderStepper(){
   const nav = document.getElementById('stepperNav');
@@ -484,12 +527,14 @@ function renderStepClient(){
    localStorage because these are per-device preferences, not part of the job. */
 const COMBO_KINDS = {
   arborist: { key: ARB_PREFS_KEY, defaults: ()=>ARBORISTS, rememberLast: true, noun: 'names' },
-  task: { key: TASK_PREFS_KEY, defaults: ()=>WORK_TASK_TYPES, rememberLast: false, noun: 'tasks' }
+  task: { key: TASK_PREFS_KEY, defaults: ()=>WORK_TASK_TYPES, rememberLast: false, noun: 'tasks' },
+  phc: { key: PHC_PREFS_KEY, defaults: ()=>PHC_TASK_TYPES, rememberLast: false, noun: 'PHC items' }
 };
 function comboPrefs(kind){
   try{
     // Key looked up directly (not via COMBO_KINDS) because newState() runs before that is defined.
-    const p = JSON.parse(localStorage.getItem(kind==='arborist' ? ARB_PREFS_KEY : TASK_PREFS_KEY)||'{}');
+    const key = kind==='arborist' ? ARB_PREFS_KEY : kind==='phc' ? PHC_PREFS_KEY : TASK_PREFS_KEY;
+    const p = JSON.parse(localStorage.getItem(key)||'{}');
     return { last: typeof p.last==='string' ? p.last : '', custom: Array.isArray(p.custom) ? p.custom.filter(n=>typeof n==='string' && n.trim()) : [] };
   }catch(e){ return { last:'', custom:[] }; }
 }
@@ -737,39 +782,64 @@ function onManualGpsChange(input){
 }
 
 /* ===================== Step 1: Tree-by-tree inventory ===================== */
-/* Photo slots stay compact on a phone: a small thumbnail beside the buttons. Tapping the thumbnail
-   expands it to full width; tapping again (or Collapse) shrinks it back. Expanded state is only
-   kept for this session and is keyed by tree/task id so it survives adding or removing items. */
+/* Photos are unlimited in every section: a wrapping row of thumbnails plus an always-present "Add"
+   button. Tapping a thumbnail expands it to full width; tapping again (or Collapse) shrinks it
+   back. Expanded state is only kept for this session and is keyed by the photo's array path + its
+   index, so it survives adding or removing other photos. */
 const expandedPhotos = new Set();
-function photoSlotHtml(photo, treeIdx, taskIdx, role){
-  const tree = state.trees[treeIdx];
-  const key = role==='main' ? 't'+tree.id : 'k'+tree.tasks[taskIdx].id;
-  const src = photoSrc(photo);
-  const target = `data-tree-idx="${treeIdx}" ${taskIdx!=null?`data-task-idx="${taskIdx}"`:''} data-role="${role}"`;
-  const what = role==='main' ? 'Tree Photo' : 'Task Photo';
-  if(!src){
-    return `<button class="w-full text-xs font-medium text-slate-600 bg-white border border-dashed border-slate-300 rounded-lg py-2.5" data-photo-pick ${target}>📷 Add ${what}</button>`;
-  }
-  const pick = `<button class="flex-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-lg py-2" data-photo-pick ${target}>📷 Replace</button>`;
-  const edit = `<button class="flex-1 text-xs font-medium bg-brand-light text-brand-dark rounded-lg py-2" data-photo-edit ${target}>✏️ Edit</button>`;
-  if(expandedPhotos.has(key)){
+function photoArrayHtml(path, label){
+  const photos = getPath(state, path) || [];
+  const items = photos.map((photo, pi)=>{
+    const key = path+'#'+pi;
+    const src = photoSrc(photo);
+    const attrs = `data-photo-path="${esc(path)}" data-photo-idx="${pi}"`;
+    if(expandedPhotos.has(key)){
+      return `
+      <div class="space-y-1.5">
+        <button class="block w-full" data-photo-expand ${attrs} aria-expanded="true" aria-label="Collapse ${esc(label.toLowerCase())}"><img src="${src}" class="photo-thumb" alt="${esc(label)}"></button>
+        <div class="flex gap-2">
+          <button class="text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-lg py-2 px-3" data-photo-expand ${attrs}>▲ Collapse</button>
+          <button class="flex-1 text-xs font-medium bg-brand-light text-brand-dark rounded-lg py-2" data-photo-edit ${attrs}>✏️ Edit</button>
+          <button class="text-xs font-medium bg-red-50 text-red-600 rounded-lg py-2 px-3" data-photo-remove ${attrs}>🗑 Remove</button>
+        </div>
+      </div>`;
+    }
     return `
-    <div class="space-y-1.5">
-      <button class="block w-full" data-photo-expand="${key}" aria-expanded="true" aria-label="Collapse ${what.toLowerCase()}"><img src="${src}" class="photo-thumb" alt="${what}"></button>
-      <div class="flex gap-2">
-        <button class="text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-lg py-2 px-3" data-photo-expand="${key}">▲ Collapse</button>
-        ${pick}${edit}
-      </div>
+    <div class="relative shrink-0">
+      <button class="relative block" data-photo-expand ${attrs} aria-expanded="false" aria-label="Expand ${esc(label.toLowerCase())}">
+        <img src="${src}" class="w-16 h-16 object-cover rounded-lg bg-slate-100" alt="${esc(label)}">
+        <span class="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] leading-none rounded px-1 py-0.5">⤢</span>
+      </button>
+      <button class="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] leading-none flex items-center justify-center shadow" data-photo-remove ${attrs} aria-label="Remove photo">✕</button>
     </div>`;
-  }
-  return `
-  <div class="flex items-center gap-2">
-    <button class="relative shrink-0" data-photo-expand="${key}" aria-expanded="false" aria-label="Expand ${what.toLowerCase()}">
-      <img src="${src}" class="w-14 h-14 object-cover rounded-lg bg-slate-100" alt="${what}">
-      <span class="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] leading-none rounded px-1 py-0.5">⤢</span>
-    </button>
-    ${pick}${edit}
+  }).join('');
+  return `<div class="space-y-2">
+    ${photos.length ? `<div class="flex flex-wrap gap-2">${items}</div>` : ''}
+    <button type="button" class="w-full text-xs font-medium text-slate-600 bg-white border border-dashed border-slate-300 rounded-lg py-2.5" data-photo-add="${esc(path)}">📷 Add ${esc(label)}${photos.length?` (${photos.length})`:''}</button>
   </div>`;
+}
+
+/* "Optional proposal item?" selector, shared by every work task (per-tree, multi-tree, PHC). */
+function proposalStatusHtml(path, value){
+  return `<label class="block text-xs"><span class="block text-slate-500 mb-1">Optional proposal item?</span>
+    <select data-bind="${path}" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
+      ${PROPOSAL_STATUSES.map(o=>`<option value="${o}" ${value===o?'selected':''}>${o}</option>`).join('')}
+    </select></label>`;
+}
+/* Checkbox list of every tree in the inventory, for tasks that apply to more than one. Selection
+   is kept as tree ids (not indexes) so it survives trees being added, removed or reordered. */
+function treeCheckboxesHtml(path, treeIds){
+  if(!state.trees.length) return `<p class="text-xs text-slate-400">Add a tree above first.</p>`;
+  return `<div class="grid grid-cols-2 gap-x-3 gap-y-1">${state.trees.map((t,i)=>`
+    <label class="flex items-center gap-2 py-0.5 text-sm">
+      <input type="checkbox" data-tree-select="${esc(path)}" data-tree-select-id="${t.id}" ${treeIds.includes(t.id)?'checked':''}>
+      Tree ${i+1}${t.species?': '+esc(t.species):''}
+    </label>`).join('')}</div>`;
+}
+/* Human-readable "Tree 1: Red Oak" labels for a set of selected tree ids, in inventory order. */
+function selectedTreeLabels(treeIds){
+  return state.trees.map((t,i)=>({ id:t.id, label:`Tree ${i+1}${t.species?': '+t.species:''}` }))
+    .filter(x=>treeIds.includes(x.id)).map(x=>x.label);
 }
 
 function renderStepTrees(){
@@ -783,7 +853,7 @@ function renderStepTrees(){
       </button>
       ${tree.open ? `
       <div class="p-4 space-y-4">
-        ${photoSlotHtml(tree.mainPhoto, ti, null, 'main')}
+        ${photoArrayHtml(`trees.${ti}.photos`, 'Tree Photo')}
 
         <div>
           <div class="flex items-baseline justify-between gap-2 mb-1">
@@ -835,6 +905,28 @@ function renderStepTrees(){
 
   appRoot.innerHTML = parts + `
     <button class="w-full bg-brand text-white font-semibold rounded-xl py-3 mt-2" id="addTreeBtn">+ Add Tree</button>
+
+    <div class="bg-white rounded-xl border border-slate-200 mt-4 p-4 space-y-3">
+      <div>
+        <h2 class="text-sm font-bold text-slate-700">Work Tasks for Multiple Trees</h2>
+        <p class="text-xs text-slate-500 mt-0.5">For one task that covers several trees in the inventory at once (e.g. a site-wide mulching pass). The report notes which trees it covers.</p>
+      </div>
+      <div class="space-y-3">
+        ${state.multiTreeTasks.map((task,mi)=>renderMultiTreeTaskCard(task,mi)).join('')}
+      </div>
+      <button class="w-full text-sm font-medium bg-brand text-white rounded-lg py-2.5" id="addMultiTaskBtn">+ Add Task for Multiple Trees</button>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 mt-4 p-4 space-y-3">
+      <div>
+        <h2 class="text-sm font-bold text-slate-700">Plant Health Care (PHC) Tasks</h2>
+        <p class="text-xs text-slate-500 mt-0.5">PHC work, assigned to whichever trees in the inventory it applies to.</p>
+      </div>
+      <div class="space-y-3">
+        ${state.phcTasks.map((task,pi)=>renderPhcTaskCard(task,pi)).join('')}
+      </div>
+      <button class="w-full text-sm font-medium bg-brand text-white rounded-lg py-2.5" id="addPhcTaskBtn">+ Add PHC Task</button>
+    </div>
   `;
 }
 
@@ -854,10 +946,59 @@ function renderTaskCard(tree, ti, task, tj){
       <label class="text-xs"><span class="block text-slate-500 mb-1">Task Price</span>
         <input data-bind="trees.${ti}.tasks.${tj}.price" value="${esc(task.price)}" type="number" step="0.01" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"></label>
     </div>
+    ${proposalStatusHtml(`trees.${ti}.tasks.${tj}.proposalStatus`, task.proposalStatus)}
     <div class="flex gap-4 text-xs">
       <label class="flex items-center gap-1.5"><input type="checkbox" data-bind="trees.${ti}.tasks.${tj}.splitJob" ${task.splitJob?'checked':''}> Split Job</label>
     </div>
-    ${photoSlotHtml(task.photo, ti, tj, 'task')}
+    ${photoArrayHtml(`trees.${ti}.tasks.${tj}.photos`, 'Task Photo')}
+  </div>`;
+}
+
+function renderMultiTreeTaskCard(task, mi){
+  return `
+  <div class="bg-slate-50 rounded-lg p-3 space-y-2.5" data-multitask-card="${mi}">
+    <div class="flex items-center justify-between">
+      <span class="text-xs font-semibold text-slate-500">Multi-Tree Task ${mi+1}</span>
+      <button class="text-xs text-red-600" data-remove-multitask="${mi}">Remove</button>
+    </div>
+    ${comboHtml('task', `multiTreeTasks.${mi}.type`, task.type, { placeholder:'Pick or type a task', cls:'text-sm bg-white' })}
+    <textarea data-bind="multiTreeTasks.${mi}.details" rows="2" placeholder="Task details" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">${esc(task.details)}</textarea>
+    <div class="grid grid-cols-2 gap-2">
+      <label class="text-xs"><span class="block text-slate-500 mb-1">Est. Man-Hours</span>
+        <input data-bind="multiTreeTasks.${mi}.hours" value="${esc(task.hours)}" type="number" step="0.25" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"></label>
+      <label class="text-xs"><span class="block text-slate-500 mb-1">Task Price</span>
+        <input data-bind="multiTreeTasks.${mi}.price" value="${esc(task.price)}" type="number" step="0.01" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"></label>
+    </div>
+    ${proposalStatusHtml(`multiTreeTasks.${mi}.proposalStatus`, task.proposalStatus)}
+    <div>
+      <span class="block text-xs font-medium text-slate-500 mb-1">Applies to Trees</span>
+      ${treeCheckboxesHtml(`multiTreeTasks.${mi}.treeIds`, task.treeIds)}
+    </div>
+    ${photoArrayHtml(`multiTreeTasks.${mi}.photos`, 'Task Photo')}
+  </div>`;
+}
+
+function renderPhcTaskCard(task, pi){
+  return `
+  <div class="bg-slate-50 rounded-lg p-3 space-y-2.5" data-phctask-card="${pi}">
+    <div class="flex items-center justify-between">
+      <span class="text-xs font-semibold text-slate-500">PHC Task ${pi+1}</span>
+      <button class="text-xs text-red-600" data-remove-phctask="${pi}">Remove</button>
+    </div>
+    ${comboHtml('phc', `phcTasks.${pi}.type`, task.type, { placeholder:'Pick or type a PHC item', cls:'text-sm bg-white' })}
+    <textarea data-bind="phcTasks.${pi}.details" rows="2" placeholder="Task details" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">${esc(task.details)}</textarea>
+    <div class="grid grid-cols-2 gap-2">
+      <label class="text-xs"><span class="block text-slate-500 mb-1">Est. Man-Hours</span>
+        <input data-bind="phcTasks.${pi}.hours" value="${esc(task.hours)}" type="number" step="0.25" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"></label>
+      <label class="text-xs"><span class="block text-slate-500 mb-1">Task Price</span>
+        <input data-bind="phcTasks.${pi}.price" value="${esc(task.price)}" type="number" step="0.01" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"></label>
+    </div>
+    ${proposalStatusHtml(`phcTasks.${pi}.proposalStatus`, task.proposalStatus)}
+    <div>
+      <span class="block text-xs font-medium text-slate-500 mb-1">Applies to Trees</span>
+      ${treeCheckboxesHtml(`phcTasks.${pi}.treeIds`, task.treeIds)}
+    </div>
+    ${photoArrayHtml(`phcTasks.${pi}.photos`, 'Task Photo')}
   </div>`;
 }
 
@@ -935,6 +1076,7 @@ function renderStepLogistics(){
       <h2 class="text-sm font-bold text-slate-700">Work plan and mobilization logistics</h2>
       <p class="text-xs text-slate-500">Describe the order of work and how the crew sets up: where trucks, chipper and crane park or stage; access route and gate/driveway width; drop and landing zones; debris and wood handling; ground protection; anything to move or protect first.</p>
       <textarea data-bind="workPlan" rows="5" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. Bucket on street in front of #12. Chipper in driveway. Remove Tree 2 first to open the drop zone for Tree 1. Plywood over lawn to the backyard gate.">${esc(state.workPlan)}</textarea>
+      ${photoArrayHtml('workPlanPhotos', 'Work Plan Photo')}
     </div>
 
     <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
@@ -988,6 +1130,8 @@ function renderStepLogistics(){
 function renderStepGenerate(){
   let total = 0;
   state.trees.forEach(t=>{ total += Number(t.price)||0; t.tasks.forEach(tk=> total += Number(tk.price)||0); });
+  state.multiTreeTasks.forEach(tk=> total += Number(tk.price)||0);
+  state.phcTasks.forEach(tk=> total += Number(tk.price)||0);
   if(state.equipment.crane.needed) total += Number(state.equipment.crane.price)||0;
   if(state.equipment.spyderLift.needed) total += Number(state.equipment.spyderLift.price)||0;
   appRoot.innerHTML = `
@@ -1062,6 +1206,24 @@ appRoot.addEventListener('click', async e=>{
   const rmTask = e.target.closest('[data-remove-task]');
   if(rmTask){ const ti=Number(rmTask.dataset.removeTask), tj=Number(rmTask.dataset.removeTaskIdx); state.trees[ti].tasks.splice(tj,1); renderStepTrees(); persist(); return; }
 
+  if(e.target.id==='addMultiTaskBtn'){
+    state.multiTreeTasks.push(newMultiTreeTask()); renderStepTrees(); persist();
+    const card = appRoot.querySelector(`[data-multitask-card="${state.multiTreeTasks.length-1}"]`);
+    if(card) card.scrollIntoView({block:'nearest'});
+    return;
+  }
+  const rmMultiTask = e.target.closest('[data-remove-multitask]');
+  if(rmMultiTask){ state.multiTreeTasks.splice(Number(rmMultiTask.dataset.removeMultitask),1); renderStepTrees(); persist(); return; }
+
+  if(e.target.id==='addPhcTaskBtn'){
+    state.phcTasks.push(newPhcTask()); renderStepTrees(); persist();
+    const card = appRoot.querySelector(`[data-phctask-card="${state.phcTasks.length-1}"]`);
+    if(card) card.scrollIntoView({block:'nearest'});
+    return;
+  }
+  const rmPhcTask = e.target.closest('[data-remove-phctask]');
+  if(rmPhcTask){ state.phcTasks.splice(Number(rmPhcTask.dataset.removePhctask),1); renderStepTrees(); persist(); return; }
+
   const comboToggle = e.target.closest('[data-combo-toggle]');
   if(comboToggle){
     const box = comboToggle.closest('[data-combo]');
@@ -1094,27 +1256,39 @@ appRoot.addEventListener('click', async e=>{
     return;
   }
 
-  const photoExpand = e.target.closest('[data-photo-expand]');
-  if(photoExpand){
-    const key = photoExpand.dataset.photoExpand;
-    if(expandedPhotos.has(key)) expandedPhotos.delete(key); else expandedPhotos.add(key);
-    renderStepTrees();
-    // Collapsing a tall photo shifts the page; keep this slot on screen.
-    const slot = appRoot.querySelector(`[data-photo-expand="${key}"]`);
-    if(slot) slot.scrollIntoView({block:'nearest'});
-    return;
-  }
-
-  const photoPick = e.target.closest('[data-photo-pick]');
-  if(photoPick){
-    pendingPhotoTarget = { treeIdx: Number(photoPick.dataset.treeIdx), taskIdx: photoPick.dataset.taskIdx!=null ? Number(photoPick.dataset.taskIdx) : null, role: photoPick.dataset.role };
+  const photoAdd = e.target.closest('[data-photo-add]');
+  if(photoAdd){
+    pendingPhotoTarget = photoAdd.dataset.photoAdd;
     photoFileInput.value = '';
     photoFileInput.click();
     return;
   }
 
+  const photoExpand = e.target.closest('[data-photo-expand]');
+  if(photoExpand){
+    const key = photoExpand.dataset.photoPath+'#'+photoExpand.dataset.photoIdx;
+    if(expandedPhotos.has(key)) expandedPhotos.delete(key); else expandedPhotos.add(key);
+    renderCurrentStep();
+    // Collapsing a tall photo shifts the page; keep this slot on screen.
+    const slot = appRoot.querySelector(`[data-photo-path="${photoExpand.dataset.photoPath}"][data-photo-idx="${photoExpand.dataset.photoIdx}"][data-photo-expand]`);
+    if(slot) slot.scrollIntoView({block:'nearest'});
+    return;
+  }
+
   const photoEdit = e.target.closest('[data-photo-edit]');
   if(photoEdit){ openEditorFromEl(photoEdit); return; }
+
+  const photoRemove = e.target.closest('[data-photo-remove]');
+  if(photoRemove){
+    const path = photoRemove.dataset.photoPath, idx = Number(photoRemove.dataset.photoIdx);
+    const arr = getPath(state, path);
+    if(arr && arr[idx] && confirm('Remove this photo?')){
+      arr.splice(idx,1);
+      expandedPhotos.delete(path+'#'+idx);
+      renderCurrentStep(); persist();
+    }
+    return;
+  }
 
   if(e.target.id==='addCustomAccessBtn'){ state.accessPermits.custom.push({label:'', checked:false, details:''}); renderStepLogistics(); persist(); return; }
   const apToggle = e.target.closest('[data-access-details]');
@@ -1142,21 +1316,19 @@ appRoot.addEventListener('click', async e=>{
 });
 
 const photoFileInput = document.getElementById('photoFileInput');
-let pendingPhotoTarget = null;
+let pendingPhotoTarget = null; // path to a photos[] array in state
 photoFileInput.addEventListener('change', async ()=>{
-  const target = pendingPhotoTarget; pendingPhotoTarget = null;
+  const path = pendingPhotoTarget; pendingPhotoTarget = null;
   const file = photoFileInput.files && photoFileInput.files[0];
   photoFileInput.value = '';
-  if(!target || !file) return;
+  if(!path || !file) return;
   let dataUrl;
   try{ dataUrl = await fileToJpegDataUrl(file); }
   catch(err){ toast(err.message); return; }
-  const tree = state.trees[target.treeIdx];
-  if(!tree) return;
-  const photoObj = { originalDataUrl: dataUrl, editedDataUrl: null, shapes: [] };
-  if(target.role==='main') tree.mainPhoto = photoObj;
-  else if(tree.tasks[target.taskIdx]) tree.tasks[target.taskIdx].photo = photoObj;
-  renderStepTrees(); persist();
+  const arr = getPath(state, path);
+  if(!arr) return;
+  arr.push({ originalDataUrl: dataUrl, editedDataUrl: null, shapes: [] });
+  renderCurrentStep(); persist();
 });
 
 const comboOf = el=>el && el.matches && el.matches('[data-combo-input]') ? el.closest('[data-combo]') : null;
@@ -1179,6 +1351,16 @@ appRoot.addEventListener('change', async e=>{
     state.accessPermits.custom[ci].checked = customCheck.checked;
     if(customCheck.checked) accessOpen.add('c:'+ci); else accessOpen.delete('c:'+ci);
     persist(); renderStepLogistics(); return;
+  }
+  const treeSelect = e.target.closest('[data-tree-select]');
+  if(treeSelect){
+    const arr = getPath(state, treeSelect.dataset.treeSelect);
+    const id = Number(treeSelect.dataset.treeSelectId);
+    const idx = arr.indexOf(id);
+    if(treeSelect.checked){ if(idx===-1) arr.push(id); }
+    else if(idx!==-1) arr.splice(idx,1);
+    persist();
+    return;
   }
 });
 
@@ -1347,7 +1529,7 @@ const edCtx = edCanvas.getContext('2d');
 const edOptionsEl = document.getElementById('edOptions');
 const measureCtx = document.createElement('canvas').getContext('2d');
 let ed = null; // current editor session
-let edTarget = null; // {treeIdx, taskIdx|null, role}
+let edTarget = null; // {path, idx} into a photos[] array in state
 // Tool settings persist between photos for the rest of the session.
 const edOpts = { color: COLORS[0], width: 4, font: 30, magR: 55, magZoom: 2.5, shapeKind: 'rect' };
 const SHAPE_KINDS = [['rect','▭','Rectangle'],['ellipse','◯','Ellipse'],['line','╱','Line'],['arrow','➜','Arrow']];
@@ -1361,12 +1543,12 @@ function eff(){ return ed.baseScale*ed.scale; }
 function tolImg(cssPx){ return cssPx*dpr()/eff(); } // a distance in screen CSS px, expressed in image px
 
 function findPhoto(target){
-  const tree = state.trees[target.treeIdx];
-  return target.role==='main' ? tree.mainPhoto : tree.tasks[target.taskIdx].photo;
+  const arr = getPath(state, target.path);
+  return arr ? arr[target.idx] : null;
 }
 
 function openEditorFromEl(el){
-  edTarget = { treeIdx: Number(el.dataset.treeIdx), taskIdx: el.dataset.taskIdx!=null ? Number(el.dataset.taskIdx) : null, role: el.dataset.role };
+  edTarget = { path: el.dataset.photoPath, idx: Number(el.dataset.photoIdx) };
   const photo = findPhoto(edTarget);
   if(!photo || !photo.originalDataUrl){ toast('No photo to edit yet.'); return; }
   const img = new Image();
@@ -1824,7 +2006,7 @@ document.getElementById('edSaveBtn').addEventListener('click', ()=>{
   photo.editedDataUrl = ed.shapes.length ? renderFlattened(ed.img, ed.shapes) : null;
   photo.shapes = JSON.parse(JSON.stringify(ed.shapes));
   closeEditor();
-  renderStepTrees();
+  renderCurrentStep();
   persist();
 });
 function closeEditor(){ edModal.classList.add('hidden'); ed=null; edTarget=null; }
@@ -2033,6 +2215,12 @@ function taskLetter(tj){ return String.fromCharCode(97+tj); }
 function treeLabel(ti){ const lead = String(state.client.leadNum||'').trim(); return lead ? `${lead}-${ti+1}` : `Tree #${ti+1}`; }
 function taskLabel(ti, tj){ const lead = String(state.client.leadNum||'').trim(); return (lead ? `${lead}-` : '') + (ti+1) + taskLetter(tj); }
 function photoSrc(photo){ return photo ? (photo.editedDataUrl || photo.originalDataUrl || null) : null; }
+/* "Photo 1234-1a" for one photo, "3 Photos (1234-1a)" for several — a section can carry any number. */
+function photoCountLabel(photos, baseLabel){
+  const n = (photos||[]).filter(ph=>photoSrc(ph)).length;
+  if(!n) return '';
+  return n===1 ? 'Photo '+baseLabel : n+' Photos ('+baseLabel+')';
+}
 
 /* Selected equipment as [name, detail] pairs, in the order shown in the app. */
 function selectedEquipment(){
@@ -2075,12 +2263,15 @@ const SUPPORT_TASKS = /^(Haul Wood|Chip Debris)/;
 function jobWorkTypes(){
   const types = [];
   const add = t=>{ if(t && !types.includes(t)) types.push(t); };
-  state.trees.forEach(tree=>tree.tasks.forEach(task=>{
+  const addTask = task=>{
     if(task.type==='Other (specify)'){ add((task.customType||'').trim()); return; }
     if(SUPPORT_TASKS.test(task.type)) return;
     const g = WORK_TYPE_GROUPS.find(([re])=>re.test(task.type));
     add(g ? g[1] : task.type);
-  }));
+  };
+  state.trees.forEach(tree=>tree.tasks.forEach(addTask));
+  state.multiTreeTasks.forEach(addTask);
+  if(state.phcTasks.length) add('PHC');
   return types.join(' / ') || 'Tree Work';
 }
 function formatInspectionDate(d){
@@ -2169,16 +2360,55 @@ async function buildMainPdfDoc(){
     ensure(lineH*3);
     doc.setDrawColor('#E2E8F0'); doc.line(margin, y-11, right, y-11);
     p(`Tree #${ti+1}: ${tree.species||'Unspecified species'}  (DBH: ${tree.dbh||'-'}")`, 11, true);
-    if(photoSrc(tree.mainPhoto)) photoNote('Photo '+treeLabel(ti));
+    if(tree.photos.length) photoNote(photoCountLabel(tree.photos, treeLabel(ti)));
     if(tree.location) p('Location: '+tree.location, 9.5, false, 12);
     if(Number(tree.price)) taskRow('', 'Tree price', '', tree.price, false);
     tree.tasks.forEach((task,tj)=>{
-      taskRow(`${ti+1}${taskLetter(tj)}`, taskTypeLabel(task) + (task.splitJob ? '  [SPLIT JOB]' : ''), task.hours, task.price, !!task.splitJob);
+      const statusTag = task.proposalStatus && task.proposalStatus!=='Included' ? `  [${task.proposalStatus.toUpperCase()}]` : '';
+      taskRow(`${ti+1}${taskLetter(tj)}`, taskTypeLabel(task) + statusTag + (task.splitJob ? '  [SPLIT JOB]' : ''), task.hours, task.price, !!task.splitJob);
       if(task.details) p(task.details, 9, false, 38);
-      if(photoSrc(task.photo)){ doc.setTextColor('#64748B'); p('Photo '+taskLabel(ti,tj), 8, false, 38); doc.setTextColor('#111111'); }
+      if(task.photos.length){ doc.setTextColor('#64748B'); p(photoCountLabel(task.photos, taskLabel(ti,tj)), 8, false, 38); doc.setTextColor('#111111'); }
     });
     y += 8;
   });
+
+  /* Work tasks that apply to several trees at once; the report spells out which ones. */
+  if(state.multiTreeTasks.length){
+    h2('Work Tasks for Multiple Trees');
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor('#64748B');
+    doc.text('LABOR HRS', hoursX, y, {align:'right'}); doc.text('PRICE', priceX, y, {align:'right'});
+    doc.setTextColor('#111111'); y += 12;
+    state.multiTreeTasks.forEach((task,mi)=>{
+      ensure(lineH*3);
+      const statusTag = task.proposalStatus && task.proposalStatus!=='Included' ? `  [${task.proposalStatus.toUpperCase()}]` : '';
+      taskRow(`M${mi+1}`, taskTypeLabel(task) + statusTag, task.hours, task.price, task.proposalStatus!=='Included');
+      if(task.details) p(task.details, 9, false, 38);
+      const treeNames = selectedTreeLabels(task.treeIds);
+      doc.setTextColor('#64748B'); p('Includes selected trees: '+(treeNames.length?treeNames.join(', '):'none selected'), 9, false, 38); doc.setTextColor('#111111');
+      if(task.photos.length){ doc.setTextColor('#64748B'); p(photoCountLabel(task.photos, 'M'+(mi+1)), 8, false, 38); doc.setTextColor('#111111'); }
+      y += 4;
+    });
+    y += 4;
+  }
+
+  /* Plant health care tasks, likewise tagged with the trees they apply to. */
+  if(state.phcTasks.length){
+    h2('Plant Health Care (PHC) Tasks');
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor('#64748B');
+    doc.text('LABOR HRS', hoursX, y, {align:'right'}); doc.text('PRICE', priceX, y, {align:'right'});
+    doc.setTextColor('#111111'); y += 12;
+    state.phcTasks.forEach((task,pi)=>{
+      ensure(lineH*3);
+      const statusTag = task.proposalStatus && task.proposalStatus!=='Included' ? `  [${task.proposalStatus.toUpperCase()}]` : '';
+      taskRow(`P${pi+1}`, taskTypeLabel(task) + statusTag, task.hours, task.price, task.proposalStatus!=='Included');
+      if(task.details) p(task.details, 9, false, 38);
+      const treeNames = selectedTreeLabels(task.treeIds);
+      doc.setTextColor('#64748B'); p('Includes selected trees: '+(treeNames.length?treeNames.join(', '):'none selected'), 9, false, 38); doc.setTextColor('#111111');
+      if(task.photos.length){ doc.setTextColor('#64748B'); p(photoCountLabel(task.photos, 'P'+(pi+1)), 8, false, 38); doc.setTextColor('#111111'); }
+      y += 4;
+    });
+    y += 4;
+  }
 
   const eq = state.equipment;
   const eqPriced = [];
@@ -2199,6 +2429,7 @@ async function buildMainPdfDoc(){
 
   h2('Work Plan & Mobilization Logistics');
   p(state.workPlan || 'None noted.');
+  if(state.workPlanPhotos.length){ doc.setTextColor('#64748B'); p(photoCountLabel(state.workPlanPhotos, 'Work Plan'), 8); doc.setTextColor('#111111'); }
   y+=6;
 
   h2('Safety Concerns');
@@ -2246,14 +2477,28 @@ async function buildMainPdfDoc(){
 
 /* Photo pages at the end of the report. Tree photos come first, with the site map, for building the
    SingleOps inventory map; task photos follow. Two per row, each labelled with its SingleOps ID. */
+/* Appends one grid entry per photo in an array; with more than one photo for the same tree/task,
+   the label gets a ".2", ".3"... suffix so every print still matches a distinct SingleOps-style id. */
+function pushPhotoEntries(list, photos, baseLabel, sub){
+  const valid = (photos||[]).filter(ph=>photoSrc(ph));
+  valid.forEach((ph,i)=>list.push({ src: photoSrc(ph), label: valid.length>1 ? `${baseLabel}.${i+1}` : baseLabel, sub }));
+}
 async function drawPhotoPages(doc, pageW, pageH, margin){
   const treePhotos = [], taskPhotos = [];
   state.trees.forEach((tree,ti)=>{
-    if(photoSrc(tree.mainPhoto)) treePhotos.push({ src: photoSrc(tree.mainPhoto), label: treeLabel(ti), sub: `Tree #${ti+1}: ${tree.species||'Unspecified species'}` });
+    pushPhotoEntries(treePhotos, tree.photos, treeLabel(ti), `Tree #${ti+1}: ${tree.species||'Unspecified species'}`);
     tree.tasks.forEach((task,tj)=>{
-      if(photoSrc(task.photo)) taskPhotos.push({ src: photoSrc(task.photo), label: taskLabel(ti,tj), sub: `${ti+1}${taskLetter(tj)}: ${taskTypeLabel(task)}` });
+      pushPhotoEntries(taskPhotos, task.photos, taskLabel(ti,tj), `${ti+1}${taskLetter(tj)}: ${taskTypeLabel(task)}`);
     });
   });
+  state.multiTreeTasks.forEach((task,mi)=>{
+    pushPhotoEntries(taskPhotos, task.photos, `M${mi+1}`, `Multiple trees: ${taskTypeLabel(task)}`);
+  });
+  state.phcTasks.forEach((task,pi)=>{
+    pushPhotoEntries(taskPhotos, task.photos, `P${pi+1}`, `PHC: ${taskTypeLabel(task)}`);
+  });
+  const workPlanPhotos = [];
+  pushPhotoEntries(workPlanPhotos, state.workPlanPhotos, 'Work Plan', 'Work plan & mobilization logistics');
   const hasMap = geoPoints().length > 0;
   const mapped = new Set(geoPoints().map(p=>p.i));
   const unmapped = state.trees.map((t,i)=>i).filter(i=>!mapped.has(i)).map(i=>treeLabel(i));
@@ -2325,6 +2570,11 @@ async function drawPhotoPages(doc, pageW, pageH, margin){
     if(y + 40 + boxH > pageH - margin){ doc.addPage(); y = margin; }
     heading('Task Photos');
     grid(taskPhotos);
+  }
+  if(workPlanPhotos.length){
+    if(y + 40 + boxH > pageH - margin){ doc.addPage(); y = margin; }
+    heading('Work Plan Photos');
+    grid(workPlanPhotos);
   }
 }
 
@@ -2429,6 +2679,16 @@ function buildCSV(){
 
 function localISODate(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function safeFilePart(s){ return String(s||'').trim().replace(/[^A-Za-z0-9.-]+/g,'_').replace(/^_+|_+$/g,''); }
+/* Writes every photo in an array into the ZIP's media folder; with more than one, filenames get a
+   "-2", "-3"... suffix so each original/edited pair stays distinct. */
+function addPhotosToZip(media, photos, baseLabel){
+  const valid = (photos||[]).filter(ph=>ph && ph.originalDataUrl);
+  valid.forEach((ph,i)=>{
+    const label = safeFilePart(baseLabel) + (valid.length>1 ? `-${i+1}` : '');
+    media.file(`${label}-original.jpg`, dataUrlToBlob(ph.originalDataUrl));
+    if(ph.editedDataUrl) media.file(`${label}-edited.jpg`, dataUrlToBlob(ph.editedDataUrl));
+  });
+}
 /* ZIP bundle (and its top-level folder): [ClientName]_[Date]_GTW_export */
 function zipExportName(){
   return `${safeFilePart(state.client.name)||'Client'}_${safeFilePart(state.client.date)||localISODate()}_GTW_export`;
@@ -2473,19 +2733,12 @@ async function generateAndDownloadZip(btn){
     if(map) root.file(map.satellite ? 'site_map_satellite.jpg' : 'site_map.jpg', dataUrlToBlob(map.dataUrl));
     const media = root.folder('media');
     state.trees.forEach((tree,ti)=>{
-      const label = safeFilePart(treeLabel(ti));
-      if(tree.mainPhoto){
-        if(tree.mainPhoto.originalDataUrl) media.file(`${label}-original.jpg`, dataUrlToBlob(tree.mainPhoto.originalDataUrl));
-        if(tree.mainPhoto.editedDataUrl) media.file(`${label}-edited.jpg`, dataUrlToBlob(tree.mainPhoto.editedDataUrl));
-      }
-      tree.tasks.forEach((task,tj)=>{
-        const tl = safeFilePart(taskLabel(ti,tj));
-        if(task.photo){
-          if(task.photo.originalDataUrl) media.file(`${tl}-original.jpg`, dataUrlToBlob(task.photo.originalDataUrl));
-          if(task.photo.editedDataUrl) media.file(`${tl}-edited.jpg`, dataUrlToBlob(task.photo.editedDataUrl));
-        }
-      });
+      addPhotosToZip(media, tree.photos, treeLabel(ti));
+      tree.tasks.forEach((task,tj)=>addPhotosToZip(media, task.photos, taskLabel(ti,tj)));
     });
+    state.multiTreeTasks.forEach((task,mi)=>addPhotosToZip(media, task.photos, `M${mi+1}`));
+    state.phcTasks.forEach((task,pi)=>addPhotosToZip(media, task.photos, `P${pi+1}`));
+    addPhotosToZip(media, state.workPlanPhotos, 'WorkPlan');
     const blob = await zip.generateAsync({ type:'blob' });
     downloadBlob(blob, exportName+'.zip');
     toast('ZIP bundle downloaded.');
@@ -2508,8 +2761,9 @@ function resetSessionUi(){
 function isBlankJob(s){
   const c = s.client;
   if(c.name || c.leadNum || c.city || c.phone || c.email || c.date || s.workPlan || s.safety) return false;
-  return s.trees.length===1 && !s.trees[0].species && !s.trees[0].mainPhoto && !s.trees[0].gps.lat && !s.trees[0].price
-    && s.trees[0].tasks.every(t=>!t.details && !t.hours && !t.price && !t.photo);
+  if(s.workPlanPhotos.length || s.multiTreeTasks.length || s.phcTasks.length) return false;
+  return s.trees.length===1 && !s.trees[0].species && !s.trees[0].photos.length && !s.trees[0].gps.lat && !s.trees[0].price
+    && s.trees[0].tasks.every(t=>!t.details && !t.hours && !t.price && !t.photos.length);
 }
 function switchToJob(s){
   resetSessionUi();
