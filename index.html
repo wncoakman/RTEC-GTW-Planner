@@ -227,6 +227,12 @@ const ARB_PREFS_KEY = 'rtecArboristPrefs', TASK_PREFS_KEY = 'rtecTaskTypePrefs',
 const PHC_TASK_TYPES = ['Targeted Application','Bio-Stim','Root Care','Invasive Control','Stump Kill'];
 const PROPOSAL_STATUSES = ['Included','Recommended','Optional'];
 
+/* The field guide: walkthrough, SOP and example deliverables. It is NOT served from this
+   site — _field-guide/ is excluded from the Pages build because it carries pricing, catalog
+   codes and photos of client properties — so this points at the shared private copy. Anyone
+   who hasn't been given access will hit a sign-in wall rather than the guide. */
+const GUIDE_URL = 'https://claude.ai/code/artifact/916e5454-c479-48fc-bcd7-87efbf48439e';
+
 /* ===================== State ===================== */
 let uidCounter = 1;
 function uid(){ return uidCounter++; }
@@ -517,7 +523,15 @@ function renderStepClient(){
       <div class="col-span-2 text-sm"><label for="arboristInput" class="block text-xs font-medium text-slate-500 mb-1">Arborist/ Sales Rep</label>
         ${comboHtml('arborist', 'client.arborist', c.arborist, { id:'arboristInput', placeholder:'Pick or type a name' })}</div>
     </div>
-  </div>`;
+  </div>
+
+  <a href="${GUIDE_URL}" target="_blank" rel="noopener"
+     class="mt-3 w-full flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl py-3 text-sm font-semibold text-brand">
+    📖 How to use this app
+  </a>
+  <p class="mt-1.5 text-center text-[11px] text-slate-400">
+    Walkthrough, SOP and example deliverables. Opens in your browser; needs a connection.
+  </p>`;
 }
 
 /* ===================== Type-or-pick fields (Arborist/ Sales Rep, Work Task) =====================
