@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="RTEC Treecare internal SOP for the GTW Job Builder: field capture, the export bundle, the OneDrive hand-off and building the SingleOps proposal.">
+<style>
+  html{color-scheme:light dark}
+  body{margin:0}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+<title>GTW Job Builder Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+
+<style>
+:root{
+  --paper:#F6F7F3; --surface:#FFFFFF; --sunken:#EEF0EA;
+  --ink:#17211B; --ink-2:#4A574F; --ink-3:#7C8A81;
+  --line:#DCE1D9; --line-strong:#C2CBBE;
+  --field:#1A6FE0; --field-soft:#E7EFFC; --field-line:#B9D3F5;
+  --office:#2F6E4A; --office-soft:#E5EFE8; --office-line:#B5D2C0;
+  --flag:#9A5B07; --flag-soft:#FAEFDC; --flag-line:#E7CF9F;
+  --shadow:0 1px 2px rgba(23,33,27,.06), 0 8px 24px -16px rgba(23,33,27,.3);
+
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#121613; --surface:#1A201B; --sunken:#161B17;
+    --ink:#E9EEE8; --ink-2:#A9B4AC; --ink-3:#7E8C83;
+    --line:#2B332C; --line-strong:#3C473E;
+    --field:#78AEFF; --field-soft:#15233A; --field-line:#27405F;
+    --office:#74C79A; --office-soft:#14281D; --office-line:#255039;
+    --flag:#E2AC61; --flag-soft:#2C2214; --flag-line:#4C3C20;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121613; --surface:#1A201B; --sunken:#161B17;
+  --ink:#E9EEE8; --ink-2:#A9B4AC; --ink-3:#7E8C83;
+  --line:#2B332C; --line-strong:#3C473E;
+  --field:#78AEFF; --field-soft:#15233A; --field-line:#27405F;
+  --office:#74C79A; --office-soft:#14281D; --office-line:#255039;
+  --flag:#E2AC61; --flag-soft:#2C2214; --flag-line:#4C3C20;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--f-body); font-size:17px; line-height:1.62;
+  -webkit-text-size-adjust:100%;
+}
+img{display:block; max-width:100%}
+a{color:var(--field)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--field); outline-offset:2px; border-radius:2px}
+
+/* ---------- top bar ---------- */
+.bar{
+  position:sticky; top:0; z-index:50;
+  background:var(--paper);
+  background:color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);
+}
+.bar-in{
+  max-width:1180px; margin:0 auto; padding:.55rem 1.1rem;
+  display:flex; align-items:center; gap:1.2rem;
+}
+.bar-mark{
+  font-family:var(--f-display); font-weight:700; font-size:.78rem;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--ink);
+  white-space:nowrap;
+}
+.bar-mark span{color:var(--ink-3); font-weight:500}
+.bar-nav{
+  display:flex; gap:.15rem; overflow-x:auto; scrollbar-width:none;
+  margin-left:auto;
+}
+.bar-nav::-webkit-scrollbar{display:none}
+.bar-nav a{
+  font-family:var(--f-display); font-size:.74rem; font-weight:600;
+  letter-spacing:.045em; text-transform:uppercase;
+  color:var(--ink-2); text-decoration:none; white-space:nowrap;
+  padding:.35rem .5rem; border-radius:3px;
+}
+.bar-nav a:hover{color:var(--ink); background:var(--sunken)}
+
+/* ---------- editorial grid ----------
+   The same column template is applied to the document and to each section,
+   so a figure inside a section can still break out past the reading measure. */
+.doc,
+.doc > section,
+.doc > .mast{
+  display:grid;
+  grid-template-columns:
+    [full-start] minmax(1.1rem,1fr)
+    [wide-start] minmax(0,210px)
+    [text-start] min(67ch,100%)
+    [text-end] minmax(0,210px)
+    [wide-end] minmax(1.1rem,1fr)
+    [full-end];
+  row-gap:0;
+}
+.doc{padding-bottom:5rem}
+.doc > *{grid-column:full}
+.doc > hr,
+.doc > footer{grid-column:text}
+.doc > section > *,
+.doc > .mast > *{grid-column:text}
+.doc > section > .wide,
+.doc > .mast > .wide{grid-column:wide}
+.doc > section > .full,
+.doc > .mast > .full{grid-column:full}
+
+/* ---------- masthead ---------- */
+.mast{padding:3.2rem 0 1.4rem}
+.kicker{
+  font-family:var(--f-display); font-size:.73rem; font-weight:700;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--office);
+  margin:0 0 .9rem;
+}
+h1{
+  font-family:var(--f-display); font-weight:700; font-size:clamp(2.1rem,5.4vw,3.1rem);
+  line-height:1.06; letter-spacing:-.022em; margin:0 0 .7rem; text-wrap:balance;
+}
+.standfirst{
+  font-size:1.16rem; line-height:1.55; color:var(--ink-2); margin:0 0 1.5rem;
+  text-wrap:pretty;
+}
+.meta{
+  display:flex; flex-wrap:wrap; gap:.45rem .5rem; align-items:center;
+  font-family:var(--f-mono); font-size:.73rem; color:var(--ink-3);
+  border-top:1px solid var(--line); padding-top:.85rem;
+}
+.meta b{color:var(--ink-2); font-weight:500}
+.dot{color:var(--line-strong)}
+
+/* ---------- section rhythm ---------- */
+section{padding-top:3.1rem}
+.eyebrow{
+  display:flex; align-items:baseline; gap:.6rem;
+  font-family:var(--f-display); font-size:.72rem; font-weight:700;
+  letter-spacing:.13em; text-transform:uppercase;
+  margin:0 0 .55rem; color:var(--ink-3);
+}
+.eyebrow .num{
+  font-variant-numeric:tabular-nums; color:var(--ink);
+  background:var(--sunken); border:1px solid var(--line);
+  padding:.1rem .42rem; border-radius:3px; letter-spacing:.06em;
+}
+.eyebrow.app .num{color:var(--field); background:var(--field-soft); border-color:var(--field-line)}
+.eyebrow.app .where{color:var(--field)}
+.eyebrow.office .num{color:var(--office); background:var(--office-soft); border-color:var(--office-line)}
+.eyebrow.office .where{color:var(--office)}
+h2{
+  font-family:var(--f-display); font-weight:600; font-size:clamp(1.5rem,3.3vw,2rem);
+  line-height:1.14; letter-spacing:-.016em; margin:0 0 .6rem; text-wrap:balance;
+}
+h3{
+  font-family:var(--f-display); font-weight:600; font-size:1.06rem;
+  letter-spacing:-.005em; margin:2rem 0 .45rem; text-wrap:balance;
+}
+h4{
+  font-family:var(--f-display); font-weight:700; font-size:.76rem;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3);
+  margin:1.6rem 0 .5rem;
+}
+p{margin:0 0 1rem; text-wrap:pretty}
+.lede{font-size:1.06rem; color:var(--ink-2)}
+ul,ol{margin:0 0 1rem; padding-left:1.35rem}
+li{margin-bottom:.42rem}
+li::marker{color:var(--ink-3)}
+strong{font-weight:600}
+code,.mono{font-family:var(--f-mono); font-size:.84em; font-weight:400}
+p code,li code,td code,th code{
+  background:var(--sunken); border:1px solid var(--line);
+  padding:.06em .32em; border-radius:3px; white-space:nowrap;
+}
+
+/* ---------- figures ---------- */
+figure{margin:1.5rem 0 1.7rem}
+.shot{
+  background:var(--surface); border:1px solid var(--line);
+  border-radius:5px; overflow:hidden; box-shadow:var(--shadow);
+  cursor:zoom-in;
+}
+.shot img{width:100%}
+figcaption{
+  margin-top:.55rem; font-family:var(--f-display); font-size:.8rem;
+  line-height:1.45; color:var(--ink-2);
+}
+figcaption b{
+  font-weight:700; font-size:.72rem; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--ink-3); margin-right:.4rem;
+}
+.pair{display:grid; grid-template-columns:1fr 1fr; gap:1rem}
+@media (max-width:620px){.pair{grid-template-columns:1fr}}
+
+.film .shot{border-color:var(--field-line)}
+.film figcaption b{color:var(--field)}
+
+/* ---------- call-outs ---------- */
+.note{
+  border-left:3px solid var(--line-strong); background:var(--sunken);
+  padding:.85rem 1rem .9rem; margin:1.4rem 0; border-radius:0 4px 4px 0;
+  font-size:.96rem;
+}
+.note p:last-child{margin-bottom:0}
+.note .tag{
+  display:block; font-family:var(--f-display); font-size:.7rem; font-weight:700;
+  letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3);
+  margin-bottom:.3rem;
+}
+.note.warn{border-left-color:var(--flag); background:var(--flag-soft)}
+.note.warn .tag{color:var(--flag)}
+.note.app{border-left-color:var(--field); background:var(--field-soft)}
+.note.app .tag{color:var(--field)}
+.note.office{border-left-color:var(--office); background:var(--office-soft)}
+.note.office .tag{color:var(--office)}
+
+/* ---------- split: who does what ---------- */
+.lanes{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line);
+  border:1px solid var(--line); border-radius:5px; overflow:hidden; margin:1.6rem 0}
+@media (max-width:620px){.lanes{grid-template-columns:1fr}}
+.lane{background:var(--surface); padding:1.05rem 1.15rem 1.2rem}
+.lane h4{margin-top:0}
+.lane.f h4{color:var(--field)}
+.lane.o h4{color:var(--office)}
+.lane ul{margin:0; padding-left:1.1rem; font-size:.95rem}
+
+/* ---------- file tree ---------- */
+.tree{
+  font-family:var(--f-mono); font-size:.8rem; line-height:1.85;
+  background:var(--surface); border:1px solid var(--line); border-radius:5px;
+  padding:1rem 1.1rem; overflow-x:auto; margin:1.4rem 0; white-space:pre;
+  color:var(--ink-2);
+}
+.tree b{color:var(--ink); font-weight:500}
+.tree i{color:var(--ink-3); font-style:normal}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto; margin:1.4rem 0; border:1px solid var(--line); border-radius:5px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; min-width:560px; font-size:.88rem}
+th,td{text-align:left; padding:.6rem .8rem; border-bottom:1px solid var(--line); vertical-align:top}
+thead th{
+  font-family:var(--f-display); font-size:.69rem; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-3); background:var(--sunken);
+  border-bottom:1px solid var(--line-strong); white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td.num{font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+td.grp{font-family:var(--f-mono); font-size:.82rem; color:var(--office); white-space:nowrap}
+
+/* ---------- step list ---------- */
+ol.steps{counter-reset:s; list-style:none; padding:0; margin:1.2rem 0}
+ol.steps > li{
+  counter-increment:s; position:relative; padding-left:2.3rem; margin-bottom:.9rem;
+}
+ol.steps > li::before{
+  content:counter(s); position:absolute; left:0; top:.14rem;
+  width:1.6rem; height:1.6rem; border-radius:50%;
+  display:grid; place-items:center;
+  font-family:var(--f-mono); font-size:.76rem; font-variant-numeric:tabular-nums;
+  background:var(--surface); border:1px solid var(--line-strong); color:var(--ink-2);
+}
+ol.steps.app > li::before{background:var(--field-soft); border-color:var(--field-line); color:var(--field)}
+ol.steps.office > li::before{background:var(--office-soft); border-color:var(--office-line); color:var(--office)}
+
+/* ---------- chips ---------- */
+.chips{display:flex; flex-wrap:wrap; gap:.35rem; margin:.8rem 0 1.2rem; padding:0; list-style:none}
+.chips li{
+  font-family:var(--f-mono); font-size:.74rem; margin:0;
+  background:var(--surface); border:1px solid var(--line); color:var(--ink-2);
+  padding:.18rem .48rem; border-radius:3px;
+}
+
+/* ---------- rule ---------- */
+.rule{border:0; border-top:1px solid var(--line); margin:3rem 0 0}
+
+/* ---------- lightbox ---------- */
+#lb{
+  position:fixed; inset:0; z-index:200; background:rgba(10,14,11,.92);
+  display:grid; place-items:center; padding:1.2rem; cursor:zoom-out;
+}
+#lb img{max-width:100%; max-height:92vh; width:auto; border-radius:4px}
+#lb .hint{
+  position:absolute; bottom:.9rem; left:0; right:0; text-align:center;
+  font-family:var(--f-display); font-size:.72rem; letter-spacing:.1em;
+  text-transform:uppercase; color:rgba(255,255,255,.55);
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+footer{
+  grid-column:text; margin-top:2.6rem; padding-top:1.2rem;
+  border-top:1px solid var(--line);
+  font-family:var(--f-mono); font-size:.74rem; color:var(--ink-3); line-height:1.7;
+}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="bar-in">
+    <div class="bar-mark">RTEC <span>· GTW Job Builder</span></div>
+    <nav class="bar-nav">
+      <a href="#setup">Setup</a>
+      <a href="#step1">1 Client</a>
+      <a href="#step2">2 Trees</a>
+      <a href="#step3">3 Logistics</a>
+      <a href="#step4">4 Generate</a>
+      <a href="#bundle">The bundle</a>
+      <a href="#onedrive">OneDrive</a>
+      <a href="#proposal">Proposal</a>
+      <a href="#fix">Fixes</a>
+    </nav>
+  </div>
+</div>
+
+<main class="doc">
+
+  <header class="mast">
+    <p class="kicker">Field app · standard operating procedure</p>
+    <h1>GTW Job Builder Field Guide</h1>
+    <p class="standfirst">One site visit, start to finish: what the arborist taps on the iPad, what comes out of the app, how it gets to OneDrive from the device, and how the office turns it into a SingleOps proposal without retyping a thing twice.</p>
+    <div class="meta">
+      <b>Audience</b> GTW arborists &amp; office <span class="dot">·</span>
+      <b>Device</b> iPhone / iPad, Safari <span class="dot">·</span>
+      <b>App</b> offline PWA, no login <span class="dot">·</span>
+      <b>Updated</b> 28 Oct 2026
+    </div>
+  </header>
+
+  <section id="demo" style="padding-top:2.2rem">
+    <p class="lede">Everything below follows one worked example — a three-tree job at an Arlington property. The screens, the report pages, the photo filenames and the coordinates are all real output from the app, captured while building that job.</p>
+
+    <figure class="wide film">
+      <div class="shot"><img src="img/gtw-four-steps.gif" alt="Recording of the GTW Job Builder moving through its four steps: Client &amp; Site, Trees, Logistics, Generate." loading="lazy" data-zoom></div>
+      <figcaption><b>Recording</b> The whole app is four steps. Tap <em>Next</em> at the bottom, or jump straight to a step from the blue stepper in the header. Nothing is ever submitted — the job saves to the device as you type.</figcaption>
+    </figure>
+
+    <div class="note warn">
+      <span class="tag">Example data</span>
+      <p>“Harrington, Dale — SingleOps #48217” is a made-up client on a real Arlington street, built to demonstrate the app. Nothing on this page is a live RTEC job.</p>
+    </div>
+
+    <div class="lanes">
+      <div class="lane f">
+        <h4>The arborist owns</h4>
+        <ul>
+          <li>Every tree, task, hour and price on site</li>
+          <li>Photos, markup and a GPS fix per tree</li>
+          <li>Permits, access and safety, with ticket numbers</li>
+          <li>Generating the ZIP and uploading it to OneDrive the same day</li>
+        </ul>
+      </div>
+      <div class="lane o">
+        <h4>The office owns</h4>
+        <ul>
+          <li>Building the proposal from the report, top to bottom</li>
+          <li>Picking the standard <code>GTW_</code> item groups, never free-typing items</li>
+          <li>Tags, notes, deposit and the split visit</li>
+          <li>Attaching the PDF and the photos to the job</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="setup">
+    <p class="eyebrow"><span class="num">00</span> <span class="where">Before the first job</span></p>
+    <h2>Put it on the home screen, once</h2>
+    <p>The Job Builder is a web app that installs like a native one. Do this in the office on wifi — the first load is the only one that needs a connection, because it caches itself and its PDF and ZIP libraries onto the device.</p>
+    <ol class="steps app">
+      <li>Open <code>wncoakman.github.io/RTEC-GTW-Planner/</code> in <strong>Safari</strong> (not Chrome — only Safari can install to the iOS home screen).</li>
+      <li>Tap <strong>Share</strong> → <strong>Add to Home Screen</strong> → <strong>Add</strong>. It appears as “GTW Builder”.</li>
+      <li>Open it from the home screen once while still on wifi and let it finish loading. From then on it runs in airplane mode, on a property with no bars, indefinitely.</li>
+      <li>In the Files app, tap <strong>Browse</strong> → <strong>⋯</strong> → <strong>Edit</strong> and switch <strong>OneDrive</strong> on. You will need it at the end of every job.</li>
+    </ol>
+
+    <h3>The three buttons in the header</h3>
+    <ul>
+      <li><strong>↻ Update</strong> — checks the published version, saves the open job, installs the new one and reloads. A dot on the button means an update is waiting. Tap it in the office, not on a roof.</li>
+      <li><strong>🐞 Report a problem</strong> — opens a pre-filled email with your device, app version and recent errors already in it. Use it instead of describing the bug from memory.</li>
+      <li><strong>Jobs</strong> — every job you have ever built stays on this device. Search by client, SingleOps # or city to reopen, copy or delete one.</li>
+    </ul>
+
+    <figure>
+      <div class="shot"><img src="img/app-15-jobs.jpg" alt="Jobs on this device: a searchable list showing the open job, SingleOps number, date, tree count and storage used." loading="lazy" data-zoom></div>
+      <figcaption><b>Jobs</b> Saved on the device, newest first — with the SingleOps #, date and tree count. <strong>Copy</strong> duplicates a job as a starting point for a similar property. The footer shows how much storage the photos are using.</figcaption>
+    </figure>
+
+    <div class="note">
+      <span class="tag">Rule</span>
+      <p>One job per property, per visit. <strong>New Job</strong> never deletes what you had open — the previous job is still under <strong>Jobs</strong>.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="step1">
+    <p class="eyebrow app"><span class="num">01</span> <span class="where">In the app</span></p>
+    <h2>Client &amp; Site</h2>
+    <p>Six fields and a name. The one that matters most is the first one.</p>
+
+    <figure class="wide">
+      <div class="pair">
+      <div>
+        <div class="shot"><img src="img/app-01-client-top.jpg" alt="Client and Site step showing SingleOps number 48217, City ARLINGTON, Client Name Harrington Dale, phone and email." loading="lazy" data-zoom></div>
+      </div>
+      <div>
+        <div class="shot"><img src="img/app-02-client-bottom.jpg" alt="Date and Arborist / Sales Rep fields, with Ian Bailey selected." loading="lazy" data-zoom></div>
+      </div></div>
+      <figcaption><b>Step 1</b> City is typed however you like and comes out in capitals on the export. <strong>Arborist / Sales Rep</strong> is a type-or-pick field: choose from the list, or type a new name and the device remembers it and offers it next time.</figcaption>
+    </figure>
+
+    <div class="note warn">
+      <span class="tag">Do not skip</span>
+      <p><strong>The SingleOps #.</strong> It becomes the report banner, the notecard title and — critically — the first part of every photo filename: <code>48217-1</code>, <code>48217-2a</code>. Leave it blank and the photos export as <code>Tree #1</code> and <code>1a</code> with no job reference at all, and the office cannot file them without renaming every one by hand.</p>
+      <p>No SingleOps # yet? Call the office and get the lead created before you walk the property.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="step2">
+    <p class="eyebrow app"><span class="num">02</span> <span class="where">In the app</span></p>
+    <h2>Trees</h2>
+    <p>The heart of it. One card per tree, numbered in the order you add them — and that number follows the tree all the way through to the site map pin, the photo filenames and the proposal line. Walk the property in a sensible order and the numbering takes care of itself.</p>
+
+    <figure>
+      <div class="shot"><img src="img/app-03-tree-card.jpg" alt="Tree 1 White Oak card showing a photo thumbnail, GPS location marked placed on satellite, and species field." loading="lazy" data-zoom></div>
+      <figcaption><b>Tree card</b> Photo, GPS, species, DBH, location on the landscape, then the work tasks. The running subtotal for the tree sits in the card header — <span class="mono">$2300.00</span> here.</figcaption>
+    </figure>
+
+    <h3>Photos, and marking them up</h3>
+    <p>Add as many photos as the tree needs. Tap a thumbnail to blow it up, then <strong>✏️ Edit</strong> to draw on it. Arrows, circles, freehand and text, six colours. The app keeps both versions — the untouched original <em>and</em> the marked-up copy — so the client-facing report shows your markup while the original is still there if anyone questions what was pointed at.</p>
+
+    <figure class="wide film">
+      <div class="shot"><img src="img/gtw-photo-markup.gif" alt="Recording of a photo being expanded, opened in the editor, annotated with two yellow arrows and a red ellipse, then saved back into the tree card." loading="lazy" data-zoom></div>
+      <figcaption><b>Recording</b> Expand → <strong>Edit</strong> → <strong>Shapes</strong> → pick the arrow, drag it on. Colour swatches are bottom-left, <strong>Undo</strong> and <strong>Clear</strong> bottom-right. <strong>Save</strong> writes the marked-up copy back to the tree. Here: two deadwood limbs arrowed, the compacted driveway-side root collar circled.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="shot"><img src="img/app-04-photo-annotated.jpg" alt="The expanded, annotated tree photo inside the Tree 1 card." loading="lazy" data-zoom></div>
+      <figcaption><b>Result</b> The markup is baked into the photo that goes into the report and the ZIP as <code>48217-1-edited.jpg</code>, alongside <code>48217-1-original.jpg</code>.</figcaption>
+    </figure>
+
+    <div class="note app">
+      <span class="tag">Photograph for the office, not for yourself</span>
+      <p>Circle what you are charging for. A pruning line item is much easier to defend with an arrow on the actual co-dominant leader than with a paragraph of description.</p>
+    </div>
+
+    <h3>GPS: capture, then fine-tune</h3>
+    <p><strong>📍 Capture GPS</strong> averages readings for 15 seconds, drops the outliers and weights what is left by accuracy — it works offline, because satellites are not the internet. Under a canopy it will still land you 8–15 m out. That is what <strong>Fine-tune</strong> is for: it drops you on satellite imagery with the GPS accuracy ring drawn in, and you drag the map until the crosshair sits on the trunk.</p>
+
+    <figure class="wide film">
+      <div class="shot"><img src="img/gtw-gps-finetune.gif" alt="Recording of the satellite pin placement screen: the dashed GPS accuracy ring, dragging the map so the crosshair lands on the tree, zooming, and saving." loading="lazy" data-zoom></div>
+      <figcaption><b>Recording</b> The dashed ring is where the phone put it; pins <span class="mono">2</span> and <span class="mono">3</span> are the other trees already recorded. Drag, pinch or use <span class="mono">+ −</span> to zoom, then <strong>Save</strong>. The tree then reads <em>“placed on satellite”</em> instead of a raw accuracy figure. <strong>Back to GPS</strong> undoes it.</figcaption>
+    </figure>
+
+    <div class="note">
+      <span class="tag">When to fine-tune</span>
+      <p>Any tree you would struggle to re-find from the coordinates alone: dense canopy, a row of similar trees, anything near a property line where the pin decides whose tree it is. The satellite step needs a connection — if you have no signal, capture GPS anyway and fine-tune from the truck.</p>
+    </div>
+
+    <h3>Work tasks</h3>
+    <p>Each tree carries its own tasks, lettered <span class="mono">1a</span>, <span class="mono">1b</span>, <span class="mono">2a</span>. One task is one proposal line.</p>
+
+    <figure class="wide">
+      <div class="pair">
+      <div><div class="shot"><img src="img/app-05-task-1a.jpg" alt="Task 1a: Prune - Crown Clean with a detailed scope, 6 estimated man-hours, $1850, marked Included, Split Job unchecked." loading="lazy" data-zoom></div></div>
+      <div><div class="shot"><img src="img/app-06-task-1b.jpg" alt="Task 1b: Prune - Clearance with 2 hours, $450, marked Recommended, and the Add Task button." loading="lazy" data-zoom></div></div></div>
+      <figcaption><b>Tasks</b> Task type is type-or-pick — the standard list is there, and anything you type is remembered for next time. Write the detail in ANSI terms the crew and the client can both act on.</figcaption>
+    </figure>
+
+    <ul>
+      <li><strong>Est. Man-Hours</strong> — crew hours, not elapsed time. The office enters these as <code>GTW Crew MHrs</code> and they must never reach SingleOps as zero.</li>
+      <li><strong>Optional proposal item?</strong> — <code>Included</code>, <code>Recommended</code> or <code>Optional</code>. This is what tells the office which lines are in the base price and which are upsell lines. It prints on the report as <span class="mono">[RECOMMENDED]</span>.</li>
+      <li><strong>Split Job</strong> — tick it when the work needs a separate trip (the stump grind after the lane permit closes, a return visit for cabling). The report flags it <span class="mono">[SPLIT JOB]</span> and the notecard lists it under <strong>Split Visits</strong>, so the office knows to split the visit rather than schedule it all in one day.</li>
+    </ul>
+
+    <h3>Work that covers several trees, and PHC</h3>
+    <p>Below the tree cards are two job-level sections. Use them instead of copying the same task onto four trees.</p>
+
+    <figure class="wide">
+      <div class="pair">
+      <div><div class="shot"><img src="img/app-07-multi-tree.jpg" alt="Work Tasks for Multiple Trees section with a Mulching task." loading="lazy" data-zoom></div></div>
+      <div><div class="shot"><img src="img/app-08-applies-to.jpg" alt="Applies to Trees checkboxes with Tree 1 White Oak and Tree 3 Sugar Maple ticked." loading="lazy" data-zoom></div></div></div>
+      <figcaption><b>Multi-tree</b> One mulching pass, priced once, tagged to the trees it covers. The report prints “Includes selected trees: Tree 1: White Oak, Tree 3: Sugar Maple”.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="shot"><img src="img/app-09-phc-task.jpg" alt="Plant Health Care task P1 Root Care, 2 hours, $540, marked Recommended, applied to Tree 1." loading="lazy" data-zoom></div>
+      <figcaption><b>PHC</b> Plant health care recorded on a GTW visit lands in its own section (<span class="mono">P1</span>, <span class="mono">P2</span>…) so the office can see at a glance what belongs on a PHC proposal rather than the tree-work one.</figcaption>
+    </figure>
+  </section>
+
+  <hr class="rule">
+
+  <section id="step3">
+    <p class="eyebrow app"><span class="num">03</span> <span class="where">In the app</span></p>
+    <h2>Logistics</h2>
+    <p>This step is what stops a crew arriving without the right truck or the right permit. Everything here becomes a tag, a note or an equipment line on the job.</p>
+
+    <figure>
+      <div class="shot"><img src="img/app-10-equipment.jpg" alt="Required Equipment pickers: bucket truck 75 feet, chipper standard, chip truck standard, extra chip truck, stump grinder Rayco, mini loader ML2, and Crane Needed ticked." loading="lazy" data-zoom></div>
+      <figcaption><b>Equipment</b> Pickers for the fleet; <strong>Crane</strong> and <strong>Spyder Lift</strong> are tick-boxes that open a spec and a price, because they are billed. <strong>Crew Details</strong> is free text — write it the way you would say it: <span class="mono">4 - 2 climbers, 2 ground; CDL driver</span>.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="shot"><img src="img/app-11-work-plan.jpg" alt="Work plan and mobilization logistics text area describing a two-day plan, with a work plan photo attached." loading="lazy" data-zoom></div>
+      <figcaption><b>Work plan</b> Order of work, where the trucks and crane set up, access route and gate width, drop and landing zones, debris handling, ground protection. Photos attach here too — a shot of the gate or the only possible crane set-up is worth a paragraph.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="shot"><img src="img/app-12-safety-access.jpg" alt="Safety Concerns text and the Access and Permits checklist with neighbour permission and Miss Utility detail boxes open." loading="lazy" data-zoom></div>
+      <figcaption><b>Safety &amp; permits</b> Safety asks three things explicitly: which tree conflicts with a wire, the class of conductor, and whether Pepco support must be a drop, a shut-off or a clear. Each permit you tick opens a <strong>Details</strong> box — that is where the ticket number, the date called in and the lead time go.</figcaption>
+    </figure>
+
+    <div class="note warn">
+      <span class="tag">Permits are where jobs die</span>
+      <p>“Miss Utility ✓” on its own tells the office nothing. <span class="mono">Ticket #2026-30117, called in 10/27. Marks expected 10/30.</span> tells them whether the crane day can be booked. Same for parking permits — note who applies and how many business days’ lead the county wants.</p>
+    </div>
+
+    <figure>
+      <div class="shot"><img src="img/app-13-notes.jpg" alt="Four note fields: Crew Notes, Client Notes, Internal Notes and Scheduling Concerns, each filled in." loading="lazy" data-zoom></div>
+      <figcaption><b>Four notes, four audiences</b> They map one-to-one onto the note fields on the SingleOps job, so keep them separate. <strong>Crew</strong>: gates, dogs, drop zones, what not to park on. <strong>Client</strong>: the scope in plain words. <strong>Internal</strong>: what you would not want forwarded. <strong>Scheduling</strong>: blackout dates and time windows.</figcaption>
+    </figure>
+  </section>
+
+  <hr class="rule">
+
+  <section id="step4">
+    <p class="eyebrow app"><span class="num">04</span> <span class="where">In the app</span></p>
+    <h2>Generate</h2>
+    <p>Check the grand total against what you quoted the client, then take the ZIP. The two single-PDF buttons exist for when you only need to hand the client or the crew one sheet — the office always wants the full bundle.</p>
+
+    <figure>
+      <div class="shot"><img src="img/app-14-generate.jpg" alt="Review and Generate Output Package screen: 3 trees, grand total $10,585.00, and the Generate and Download ZIP Bundle button." loading="lazy" data-zoom></div>
+      <figcaption><b>Generate</b> The total adds every tree, task, multi-tree, PHC and priced-equipment line — <span class="mono">$10,585.00</span> here, which is the three trees plus mulching, root care and the crane.</figcaption>
+    </figure>
+
+    <div class="note warn">
+      <span class="tag">Signal matters here, and only here</span>
+      <p>The satellite site map is fetched at the moment you press generate. With a connection you get aerial imagery with numbered pins. Without one, the app falls back to a drawn diagram and says so. If you generated the bundle with no bars, generate it again from the truck and upload that one.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="bundle">
+    <p class="eyebrow"><span class="num">05</span> <span class="where">What comes out</span></p>
+    <h2>The export bundle</h2>
+    <p>One ZIP, named for the client and the visit date. This is the actual bundle from the worked example:</p>
+
+    <div class="tree"><b>Harrington_Dale_2026-10-28_GTW_export.zip</b>
+└── Harrington_Dale_2026-10-28_GTW_export/
+    ├── <b>RTEC_GTW_ARLINGTON_2026-10-28_Report.pdf</b>     <i>6 pp — the proposal source</i>
+    ├── <b>RTEC_GTW_ARLINGTON_2026-10-28_Notecard.pdf</b>   <i>5×7 crew work order</i>
+    ├── <b>site_map_satellite.jpg</b>                       <i>aerial, numbered pins</i>
+    ├── <b>tree_coordinates.geojson</b>                     <i>one point per tree</i>
+    ├── <b>tree_coordinates.csv</b>                         <i>same, as a table</i>
+    └── media/
+        ├── 48217-1-original.jpg      <i>Tree 1, as shot</i>
+        ├── <b>48217-1-edited.jpg</b>        <i>Tree 1, marked up</i>
+        ├── 48217-2-original.jpg      <i>Tree 2</i>
+        ├── 48217-2a-original.jpg     <i>Tree 2, task 2a</i>
+        ├── 48217-3-original.jpg      <i>Tree 3</i>
+        ├── 48217-3a-original.jpg     <i>Tree 3, task 3a</i>
+        └── WorkPlan-original.jpg     <i>access / set-up</i></div>
+
+    <p>The photo names are the whole trick: <code>48217-1</code> is tree 1 on job 48217, <code>48217-2a</code> is task <em>a</em> on tree 2. They line up with the line items on the report, the pins on the site map and the attachment names on the SingleOps job, so nobody has to guess which photo goes with which charge.</p>
+
+    <h3>The report — six pages, in proposal-entry order</h3>
+    <p>The report is deliberately laid out in the order the office types a proposal. Work down it; do not jump around.</p>
+
+    <figure class="wide">
+      <div class="pair">
+        <div><div class="shot"><img src="img/deliv-report-p1.jpg" alt="Report page 1: banner, client and site information, and the priced tree and task line items." loading="lazy" data-zoom></div></div>
+        <div><div class="shot"><img src="img/deliv-report-p2.jpg" alt="Report page 2: equipment, work plan, safety concerns, access and permits, crew and internal notes." loading="lazy" data-zoom></div></div>
+      </div>
+      <figcaption><b>Pages 1–2</b> Page 1 is the line-item table — tree, DBH, each lettered task with its hours and price, then multi-tree and PHC tasks. Page 2 is everything the crew and the scheduler need: equipment, work plan, safety, permits with their ticket numbers, and the notes.</figcaption>
+    </figure>
+
+    <figure class="wide">
+      <div class="pair">
+        <div><div class="shot"><img src="img/deliv-report-p3.jpg" alt="Report page 3: client notes and the tag list." loading="lazy" data-zoom></div></div>
+        <div><div class="shot"><img src="img/deliv-report-p4.jpg" alt="Report page 4: the satellite site map with numbered pins and the tree photos." loading="lazy" data-zoom></div></div>
+      </div>
+      <figcaption><b>Pages 3–4</b> Page 3 ends with <strong>Tags</strong> — a ready-made list to paste onto the SingleOps job. Pages 4–6 carry the site map and every photo, each captioned with the label the file carries.</figcaption>
+    </figure>
+
+    <figure class="wide">
+      <div class="shot"><img src="img/deliv-sitemap.jpg" alt="Satellite site map with three numbered blue pins labelled 48217-1 White Oak, 48217-2 Green Ash and 48217-3 Sugar Maple, with a scale bar and north arrow." loading="lazy" data-zoom></div>
+      <figcaption><b>site_map_satellite.jpg</b> Numbered pins, species labels, scale bar and north arrow. This is what makes a tree findable a month later by someone who was never on site.</figcaption>
+    </figure>
+
+    <h3>The notecard — the crew's sheet</h3>
+    <p>A single 5×7 landscape card holding what a crew leader needs at the kerb and nothing else: total man-hours in the title, split visits, equipment, crew, work plan, permits, scheduling and safety. It deliberately leaves out the pricing that fills the main report.</p>
+
+    <figure class="wide">
+      <div class="shot"><img src="img/deliv-notecard.jpg" alt="The 5x7 notecard PDF: job title with 22 man-hours, split visits, equipment, crew details, work plan, access and permits, scheduling concerns and safety notes." loading="lazy" data-zoom></div>
+      <figcaption><b>Notecard</b> <span class="mono">22 man-hrs</span> in the banner, <strong>Split Visits</strong> called out first — <span class="mono">48217-2: Tree #2 (2b) Stump Grinding 2h</span>. Print it, or hand it to the crew as a PDF.</figcaption>
+    </figure>
+
+    <h3>Coordinates</h3>
+    <p>Two files carry the same three points, for whoever maintains the inventory map. The CSV opens in Excel; the GeoJSON drops straight into any mapping tool.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Tree</th><th>Latitude</th><th>Longitude</th><th>±m</th><th>Species</th><th>DBH</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td class="num">38.895328</td><td class="num">−77.126026</td><td class="num">placed</td><td>White Oak</td><td class="num">36"</td></tr>
+          <tr><td class="num">2</td><td class="num">38.895170</td><td class="num">−77.125840</td><td class="num">3.8</td><td>Green Ash</td><td class="num">22"</td></tr>
+          <tr><td class="num">3</td><td class="num">38.895470</td><td class="num">−77.126230</td><td class="num">5.1</td><td>Sugar Maple</td><td class="num">28"</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Tree 1 shows <em>placed</em> rather than an accuracy figure because it was fine-tuned on the satellite image — which is the more trustworthy of the two.</p>
+  </section>
+
+  <hr class="rule">
+
+  <section id="onedrive">
+    <p class="eyebrow"><span class="num">06</span> <span class="where">On the device</span></p>
+    <h2>Getting it to OneDrive</h2>
+    <p>Do this before you leave the driveway, or at the latest before you go home. Until the bundle is in OneDrive it exists in exactly one place — that iPad.</p>
+
+    <h4>Where it goes</h4>
+    <div class="tree"><b>RTEC Intranet - Documents</b>
+└── GTW Job Exports/
+    └── 2026/
+        └── <b>48217_Harrington</b>/        <i>[SingleOps #]_[client surname]</i>
+            ├── RTEC_GTW_ARLINGTON_2026-10-28_Report.pdf
+            ├── RTEC_GTW_ARLINGTON_2026-10-28_Notecard.pdf
+            ├── site_map_satellite.jpg
+            ├── tree_coordinates.geojson
+            ├── tree_coordinates.csv
+            └── media/</div>
+
+    <h4>The upload, on iOS</h4>
+    <ol class="steps">
+      <li>Safari finishes the download — tap the <strong>⤓</strong> button beside the address bar, then the ZIP, to jump straight to it in <strong>Files</strong>. Otherwise it is in <strong>Files → On My iPad → Downloads</strong>.</li>
+      <li><strong>Tap the .zip once.</strong> iOS unpacks it into a folder of the same name, right next to it. Do this on the device, not at the office — the office should be able to open the report straight from OneDrive without downloading anything.</li>
+      <li><strong>Long-press the unpacked folder → Move.</strong></li>
+      <li>Choose <strong>OneDrive → RTEC Intranet - Documents → GTW Job Exports → 2026</strong>. Tap <strong>New Folder</strong>, name it <code>48217_Harrington</code>, open it, then <strong>Move</strong>.</li>
+      <li>Wait for the cloud icon to turn into a <strong>✓</strong>. That tick is the upload actually finishing — a progress ring means it is still going, and closing Files will pause it.</li>
+      <li>Delete the leftover <code>.zip</code> from Downloads so the next job's bundle is the only one there.</li>
+      <li>Open the SingleOps job and paste the OneDrive folder link into <strong>Internal Notes</strong>, so the office does not have to go looking.</li>
+    </ol>
+
+    <div class="note">
+      <span class="tag">Faster, when it works</span>
+      <p>From Safari's download list you can tap <strong>Share → Save to Files → OneDrive</strong> and skip straight to step 4 — but that saves the <em>zipped</em> bundle. Only use it when you are out of time, and unpack it at the office.</p>
+    </div>
+
+    <div class="note warn">
+      <span class="tag">No signal on site</span>
+      <p>Generate the bundle anyway — everything but the satellite map works offline, and the job is saved on the device regardless. Regenerate and upload once you are back in range, so the office gets the aerial site map rather than the drawn fallback.</p>
+    </div>
+
+    <h4>Naming, so the folder stays searchable</h4>
+    <ul>
+      <li>Folder: <code>[SingleOps #]_[client surname]</code> — <code>48217_Harrington</code>. The number first means the folder sorts and searches the same way the job does.</li>
+      <li>Never rename the files inside. Their names are what tie the photos to the line items and the map pins.</li>
+      <li>A second visit to the same property gets its own folder under its own SingleOps #.</li>
+    </ul>
+  </section>
+
+  <hr class="rule">
+
+  <section id="proposal">
+    <p class="eyebrow office"><span class="num">07</span> <span class="where">At the office</span></p>
+    <h2>Building the SingleOps proposal</h2>
+    <p>Open the report PDF beside SingleOps and work down page 1. The report was built in this order on purpose — client, then trees in order, then equipment, then tags, then notes.</p>
+
+    <h3>Job settings first</h3>
+    <ul>
+      <li><strong>Operation</strong> GTW · <strong>Job Type</strong> One-Off · <strong>Per Visit</strong> invoicing</li>
+      <li><strong>Ref #</strong> <code>48217</code> — the same number the arborist typed on step 1</li>
+      <li><strong>Sales Rep</strong> = the arborist on the report (<span class="mono">Ian Bailey</span>)</li>
+      <li><strong>Terms</strong> Due on receipt, and set the <strong>Tax Location</strong></li>
+      <li><strong>Job Name</strong> = the visit location or a short description</li>
+    </ul>
+
+    <div class="note warn">
+      <span class="tag">Catalog discipline</span>
+      <p>The task names on the report are the <em>app's</em> vocabulary, not the SingleOps catalog's. Typing “Prune - Crown Clean” into the item search will create a near-duplicate item. Always pick the standard <code>GTW_</code> group and fill its lines — that is what keeps reporting and the crew work-order layout intact.</p>
+    </div>
+
+    <h3>One group line per tree</h3>
+    <p>Here is the worked example, translated. Every figure comes straight off page 1 of the report.</p>
+
+    <div class="tablewrap wide">
+      <table>
+        <thead>
+          <tr><th>Report line</th><th>Group</th><th>Lines to fill</th><th>MHrs</th><th>Price</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tree #1 · White Oak 36"</strong><br>1a Prune – Crown Clean</td>
+            <td class="grp">GTW_PR</td>
+            <td>Tree Species line with <strong>Tree # 1</strong>, <strong>White Oak</strong>, <strong>DBH 36</strong>; Pruning; GTW Crew MHrs</td>
+            <td class="num">6</td><td class="num">$1,850.00</td><td>Included</td>
+          </tr>
+          <tr>
+            <td>1b Prune – Clearance<br>(structure / utility)</td>
+            <td class="grp">GTW_PR</td>
+            <td>Add-on line on the same group — MP1"+ / clearance</td>
+            <td class="num">2</td><td class="num">$450.00</td><td>Recommended</td>
+          </tr>
+          <tr>
+            <td><strong>Tree #2 · Green Ash 22"</strong><br>2a Removal – Full Tree</td>
+            <td class="grp">GTW_TDC</td>
+            <td>Tree # 2, Green Ash, DBH 22; TDCB; Take Down-SW; HWO; GTW Crew MHrs; crane as an Equipment item</td>
+            <td class="num">10</td><td class="num">$3,400.00</td><td>Included</td>
+          </tr>
+          <tr>
+            <td>2b Stump Grinding<br><span class="mono">[SPLIT JOB]</span></td>
+            <td class="grp">GTW_SG</td>
+            <td>Same proposal, <strong>split the visit</strong> → second visit <code>48217-2</code>; grinder as Equipment</td>
+            <td class="num">2</td><td class="num">$475.00</td><td>Included</td>
+          </tr>
+          <tr>
+            <td><strong>Tree #3 · Sugar Maple 28"</strong><br>3a Cabling / Bracing</td>
+            <td class="grp">GTW_TSS</td>
+            <td>Tree # 3, Sugar Maple, DBH 28; installation; cable materials; GTW Crew MHrs</td>
+            <td class="num">4</td><td class="num">$1,250.00</td><td>Recommended</td>
+          </tr>
+          <tr>
+            <td>M1 Mulching<br><span class="mono">Trees 1 &amp; 3</span></td>
+            <td class="grp">site-wide</td>
+            <td>Material + labour lines; name the trees it covers in the line description</td>
+            <td class="num">3</td><td class="num">$420.00</td><td>Included</td>
+          </tr>
+          <tr>
+            <td>P1 Root Care<br><span class="mono">Tree 1</span></td>
+            <td class="grp">PHC</td>
+            <td>Not a GTW line — hand to PHC as its own proposal or a PHC lead</td>
+            <td class="num">2</td><td class="num">$540.00</td><td>Recommended</td>
+          </tr>
+          <tr>
+            <td>Crane<br>28-ton, 90' reach</td>
+            <td class="grp">Equipment</td>
+            <td>Priced equipment item on the removal group — never in the notes</td>
+            <td class="num">—</td><td class="num">$2,200.00</td><td>Included</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Those eight lines total <span class="mono">$10,585.00</span>, which is the grand total on the app's Generate screen. If your proposal does not match that figure, something was mistyped — check before you send.</p>
+
+    <h3>Equipment, tags and notes</h3>
+    <p>Page 2 lists every truck and machine; page 3 hands you the tags already written out. Paste them, then add the house scheduling tags.</p>
+    <ul class="chips">
+      <li>Bucket Truck 75'</li><li>Chipper Standard</li><li>Chip Truck Standard</li><li>Extra Chip Truck Standard</li>
+      <li>Stump Grinder Rayco</li><li>Mini Loader ML2</li><li>Crane 28-ton boom truck</li>
+      <li>Neighbor's Written Permission</li><li>Pepco</li><li>Parking Permits</li><li>Miss Utility</li><li>Traffic Control</li>
+      <li>Crew: 4 – 2 climbers, 2 ground</li>
+    </ul>
+    <p>Then the house tags on top: <code>S-CREW 4</code>, <code>S-Property Size</code>, <code>P-Site Conditions</code>, and the scheduling tags the arborist's <strong>Scheduling Concerns</strong> note calls for — here, a weekday for the lane permit and nothing during 11/14–11/21.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>On the report</th><th>In SingleOps</th></tr></thead>
+        <tbody>
+          <tr><td>SingleOps #</td><td>Job → Ref #</td></tr>
+          <tr><td>Client, city, phone, email</td><td>Match to the existing Client record — do not create a duplicate</td></tr>
+          <tr><td>Arborist / Sales Rep</td><td>Job → Sales Rep</td></tr>
+          <tr><td>Tree + task lines</td><td>Proposal line items inside the <code>GTW_</code> group</td></tr>
+          <tr><td><span class="mono">[SPLIT JOB]</span> flag</td><td>A second visit on the same proposal, its own invoice</td></tr>
+          <tr><td><span class="mono">[RECOMMENDED]</span> / <span class="mono">[OPTIONAL]</span></td><td>Proposal line status — not deleted, offered</td></tr>
+          <tr><td>Equipment + permits + crew</td><td>Job → Tags (verbatim from page 3)</td></tr>
+          <tr><td>Crew / Client / Internal notes</td><td>The matching note fields — keep the total under 1,000 characters</td></tr>
+          <tr><td>Scheduling Concerns</td><td>Scheduling tags and the scheduler's note</td></tr>
+          <tr><td>Report PDF + <code>media/</code> photos</td><td>Job attachments — names already match the line items</td></tr>
+          <tr><td>Notecard PDF</td><td>Goes to the crew as the work order</td></tr>
+          <tr><td>GeoJSON / CSV + site map</td><td>Tree inventory map — manual import today</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note office">
+      <span class="tag">Deposit</span>
+      <p><strong>50% when scheduled</strong> on one-off jobs — except Customer Type <strong>Commercial</strong>, <strong>Municipal</strong> or <strong>Government</strong>. Check the payment arrangement is on file and the client has no balance-due notice before anything gets scheduled.</p>
+    </div>
+
+    <h3>Before you hand it over</h3>
+    <ul>
+      <li>One-Off, Operation GTW, Sales Rep, Terms and Tax Location all set</li>
+      <li>Every tree line carries <strong>Tree #, Species and DBH</strong> — they print on the GTW work order</li>
+      <li>No group left on <strong>0 GTW Crew hours</strong>; hours adjusted to this job, not left at the default</li>
+      <li>Equipment on Equipment items, not described in a note</li>
+      <li>The split visit exists, and the deposit rule matches the Customer Type</li>
+      <li>Report PDF and photos attached; proposal total matches the app's grand total</li>
+    </ul>
+  </section>
+
+  <hr class="rule">
+
+  <section id="fix">
+    <p class="eyebrow"><span class="num">08</span> <span class="where">When something is off</span></p>
+    <h2>Quick fixes</h2>
+    <div class="tablewrap wide">
+      <table>
+        <thead><tr><th>What you see</th><th>What happened</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Photos named <code>Tree #1</code>, <code>1a</code></td>
+            <td>The SingleOps # was blank when the bundle was generated</td>
+            <td>Reopen the job, fill in step 1, generate again. Do not rename the files by hand.</td>
+          </tr>
+          <tr>
+            <td>Site map is a drawn diagram</td>
+            <td>No connection at the moment of generating</td>
+            <td>Regenerate in range and replace the folder in OneDrive.</td>
+          </tr>
+          <tr>
+            <td>A tree's pin is in the wrong yard</td>
+            <td>GPS fix under canopy, never fine-tuned</td>
+            <td><strong>Fine-tune</strong> on the tree card, drag the crosshair to the trunk, save, regenerate.</td>
+          </tr>
+          <tr>
+            <td>A job has vanished</td>
+            <td>Almost never gone — just not the open one</td>
+            <td><strong>Jobs</strong> in the header, search by client or SingleOps #.</td>
+          </tr>
+          <tr>
+            <td>ZIP will not send by email</td>
+            <td>Photo bundles run to several MB</td>
+            <td>It is not meant to be emailed. Upload to OneDrive and send the link.</td>
+          </tr>
+          <tr>
+            <td>App looks out of date</td>
+            <td>The device is running a cached older build</td>
+            <td><strong>↻</strong> in the header on wifi — it saves the open job first, then reloads.</td>
+          </tr>
+          <tr>
+            <td>Storage warning on the Jobs screen</td>
+            <td>Photos from finished jobs still on the device</td>
+            <td>Once the bundle is safely in OneDrive, delete the job from <strong>Jobs</strong>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Anything else — use the <strong>🐞</strong> button in the app header. It writes the email with the device, app version and the recent errors already filled in, which is worth far more than a description after the fact.</p>
+  </section>
+
+  <footer>
+    RTEC Treecare · GTW Job Builder SOP · prepared 28 Oct 2026<br>
+    Worked example “Harrington, Dale — #48217” is demonstration data, not a client record.<br>
+    App source: github.com/wncoakman/RTEC-GTW-Planner · Site imagery: Esri, Maxar, Earthstar Geographics
+  </footer>
+
+</main>
+
+<script>
+(function () {
+  var lb = null;
+  function close() { if (lb) { lb.remove(); lb = null; document.body.style.overflow = ''; } }
+  document.addEventListener('click', function (e) {
+    var img = e.target.closest('img[data-zoom]');
+    if (!img) return;
+    close();
+    lb = document.createElement('div');
+    lb.id = 'lb';
+    lb.setAttribute('role', 'dialog');
+    lb.setAttribute('aria-label', img.alt || 'Enlarged image');
+    var big = document.createElement('img');
+    big.src = img.src;
+    big.alt = img.alt;
+    var hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.textContent = 'Click anywhere or press Esc to close';
+    lb.appendChild(big);
+    lb.appendChild(hint);
+    lb.addEventListener('click', close);
+    document.body.appendChild(lb);
+    document.body.style.overflow = 'hidden';
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+})();
+</script>
+
+</body>
+</html>

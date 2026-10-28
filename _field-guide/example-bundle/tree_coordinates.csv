@@ -1,0 +1,4 @@
+TreeNumber,Latitude,Longitude,Accuracy_m,Species,DBH,Location,Price,LeadNum,City
+1,38.895328,-77.126026,,White Oak,36,"Front yard, street side, canopy over driveway and N Quincy St",,48217,ARLINGTON
+2,38.895170,-77.125840,3.8,Green Ash,22,"Rear yard, 10' off the SE corner of the house, inside the fence line",,48217,ARLINGTON
+3,38.895470,-77.126230,5.1,Sugar Maple,28,"Side yard north, 6' off the neighbor fence at 1418",,48217,ARLINGTON

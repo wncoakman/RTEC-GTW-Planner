@@ -1,0 +1,15 @@
+# GitHub Pages build config.
+#
+# The published site is PUBLIC even when this repository is private — access-
+# controlled Pages requires GitHub Enterprise Cloud, not Pro. _field-guide/
+# holds internal material (pricing, deposit terms, catalog codes, photos of
+# client properties) and must never be served.
+#
+# Jekyll already skips underscore-prefixed directories; this makes it explicit
+# so the exclusion does not depend on that convention alone.
+#
+# Do NOT add a .nojekyll file to this repository — that would disable Jekyll
+# and start publishing _field-guide/ to the open internet.
+exclude:
+  - _field-guide
+  - _config.yml

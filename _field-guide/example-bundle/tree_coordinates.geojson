@@ -1,0 +1,65 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -77.126026,
+          38.895328
+        ]
+      },
+      "properties": {
+        "treeNumber": 1,
+        "species": "White Oak",
+        "dbh": "36",
+        "location": "Front yard, street side, canopy over driveway and N Quincy St",
+        "price": "",
+        "leadNum": "48217",
+        "city": "ARLINGTON",
+        "accuracyMeters": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -77.12584,
+          38.89517
+        ]
+      },
+      "properties": {
+        "treeNumber": 2,
+        "species": "Green Ash",
+        "dbh": "22",
+        "location": "Rear yard, 10' off the SE corner of the house, inside the fence line",
+        "price": "",
+        "leadNum": "48217",
+        "city": "ARLINGTON",
+        "accuracyMeters": "3.8"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -77.12623,
+          38.89547
+        ]
+      },
+      "properties": {
+        "treeNumber": 3,
+        "species": "Sugar Maple",
+        "dbh": "28",
+        "location": "Side yard north, 6' off the neighbor fence at 1418",
+        "price": "",
+        "leadNum": "48217",
+        "city": "ARLINGTON",
+        "accuracyMeters": "5.1"
+      }
+    }
+  ]
+}
