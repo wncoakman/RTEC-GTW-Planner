@@ -15,7 +15,7 @@
  * Bump CACHE_VERSION whenever any shipped file changes, so returning users
  * pick up the update on next launch instead of running stale cached code.
  */
-const CACHE_VERSION = 'rtec-gtw-builder-v12';
+const CACHE_VERSION = 'rtec-gtw-builder-v13';
 
 const SAME_ORIGIN_URLS = [
   './',
@@ -75,6 +75,10 @@ self.addEventListener('fetch', (event) => {
   if (url.hostname === 'server.arcgisonline.com') return;
   // The app's update check reads sw.js fresh; never answer it from (or store it in) the cache.
   if (url.origin === self.location.origin && url.pathname.endsWith('/sw.js')) return;
+  // The field guide (guide/) streams from the network. Its screen recordings run to ~12 MB;
+  // cached, they would sit in the app's storage until the next version bump and make the
+  // system that much likelier to evict this app's data — which includes unexported jobs.
+  if (url.origin === self.location.origin && url.pathname.includes('/guide/')) return;
 
   const isSameOrigin = url.origin === self.location.origin;
 

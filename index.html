@@ -227,11 +227,10 @@ const ARB_PREFS_KEY = 'rtecArboristPrefs', TASK_PREFS_KEY = 'rtecTaskTypePrefs',
 const PHC_TASK_TYPES = ['Targeted Application','Bio-Stim','Root Care','Invasive Control','Stump Kill'];
 const PROPOSAL_STATUSES = ['Included','Recommended','Optional'];
 
-/* The field guide: walkthrough, SOP and example deliverables. It is NOT served from this
-   site — _field-guide/ is excluded from the Pages build because it carries pricing, catalog
-   codes and photos of client properties — so this points at the shared private copy. Anyone
-   who hasn't been given access will hit a sign-in wall rather than the guide. */
-const GUIDE_URL = 'https://claude.ai/code/artifact/916e5454-c479-48fc-bcd7-87efbf48439e';
+/* The field guide: walkthrough, SOP and example deliverables. Published alongside the app at
+   /guide/, so this stays relative and works from any host or fork. sw.js deliberately keeps
+   /guide/ out of the app's cache, so it needs a connection — hence the caption on the link. */
+const GUIDE_URL = 'guide/';
 
 /* ===================== State ===================== */
 let uidCounter = 1;
