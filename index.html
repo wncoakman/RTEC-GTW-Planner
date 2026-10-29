@@ -24,6 +24,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <style>
+  /* Keep-out zone at the top of the screen. On an iPhone the camera and Dynamic Island occupy
+     roughly the top 1.5 cm in portrait, where the screen is hard to read and awkward to tap.
+     No button, link or piece of job data sits above this line anywhere in the app. env() covers
+     the cutout the device reports; the rest is clearance below it. Use it for the top padding
+     of anything that touches the top of the viewport — the header and both full-screen modals. */
+  :root{ --top-clear: max(1.75rem, calc(env(safe-area-inset-top) + 1.6rem)); }
   html,body{ overscroll-behavior:none; -webkit-tap-highlight-color:transparent; }
   body{ padding-bottom: env(safe-area-inset-bottom); }
   #editorCanvas{ touch-action:none; display:block; background:#111; }
@@ -41,7 +47,7 @@
 <body class="bg-slate-50 text-slate-800 font-sans">
 
 <header class="bg-brand text-white sticky top-0 z-30 shadow">
-  <div class="max-w-3xl mx-auto px-4 pb-4 flex items-start justify-between gap-2" style="padding-top:max(1.5rem, calc(env(safe-area-inset-top) + 0.9rem))">
+  <div class="max-w-3xl mx-auto px-4 pb-4 flex items-start justify-between gap-2" style="padding-top:var(--top-clear)">
     <div class="min-w-0">
       <h1 class="text-base sm:text-lg font-bold leading-tight truncate"><span class="hidden sm:inline">RTEC </span>GTW Job Builder</h1>
       <p class="text-xs text-brand-light opacity-90 truncate" id="jobSubtitle">New Job</p>
@@ -49,6 +55,7 @@
     <div class="flex gap-1.5 shrink-0 mt-7">
       <button id="updateBtn" class="relative text-base leading-none bg-white/15 hover:bg-white/25 px-2 py-1.5 rounded-lg" aria-label="Check for updates" title="Check for updates">⟳<span id="updateDot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-brand"></span></button>
       <button id="bugBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2 py-1.5 rounded-lg" aria-label="Report a problem" title="Report a problem">🐞</button>
+      <button id="guideBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2 py-1.5 rounded-lg" aria-label="How to use this app" title="How to use this app">📖</button>
       <button id="jobsBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2.5 py-1.5 rounded-lg whitespace-nowrap">Jobs</button>
       <button id="newJobBtn" class="text-xs bg-white/15 hover:bg-white/25 px-2.5 py-1.5 rounded-lg whitespace-nowrap">New Job</button>
     </div>
@@ -108,7 +115,7 @@
 
 <!-- ===================== Satellite pin placement ===================== -->
 <div id="mapModal" class="fixed inset-0 z-50 bg-black hidden flex flex-col">
-  <div class="flex items-center justify-between px-3 py-2 bg-slate-900 text-white text-sm">
+  <div class="flex items-center justify-between px-3 py-2 bg-slate-900 text-white text-sm" style="padding-top:var(--top-clear)">
     <button id="mapCancelBtn" class="px-3 py-1.5 rounded bg-slate-700">Cancel</button>
     <span class="font-semibold" id="mapTitle">Place tree</span>
     <button id="mapSaveBtn" class="px-3 py-1.5 rounded bg-brand font-semibold">Save</button>
@@ -139,7 +146,7 @@
 
 <!-- ===================== Photo Doodle Editor Modal ===================== -->
 <div id="editorModal" class="fixed inset-0 z-50 bg-black hidden flex flex-col">
-  <div class="flex items-center justify-between px-3 py-2 bg-slate-900 text-white text-sm">
+  <div class="flex items-center justify-between px-3 py-2 bg-slate-900 text-white text-sm" style="padding-top:var(--top-clear)">
     <button id="edCancelBtn" class="px-3 py-1.5 rounded bg-slate-700">Cancel</button>
     <span class="font-semibold">Edit Photo</span>
     <button id="edSaveBtn" class="px-3 py-1.5 rounded bg-brand font-semibold">Save</button>
@@ -2964,6 +2971,11 @@ function bugMailto(text, includeJob){
   const subject = `GTW Job Builder problem report${state.client.leadNum && includeJob ? ' (SingleOps # '+state.client.leadNum+')' : ''}`;
   return `mailto:${BUG_REPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bugReportBody(text, includeJob).replace(/\n/g, '\r\n'))}`;
 }
+/* The guide opens in a new tab. On an iPhone the home-screen app has no browser chrome and the
+   guide is inside the app's scope, so it would otherwise open with no way back; the guide page
+   carries its own "Back to the app" link for that reason. */
+document.getElementById('guideBtn').addEventListener('click', ()=>{ window.open(GUIDE_URL, '_blank', 'noopener'); });
+
 document.getElementById('bugBtn').addEventListener('click', ()=>{ bugModal.classList.remove('hidden'); document.getElementById('bugText').focus(); });
 document.getElementById('bugCloseBtn').addEventListener('click', ()=>bugModal.classList.add('hidden'));
 bugModal.addEventListener('click', e=>{ if(e.target===bugModal) bugModal.classList.add('hidden'); });

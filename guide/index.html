@@ -54,11 +54,22 @@ code,.mono{font-family:var(--mono); font-size:.86em; font-variant-ligatures:none
 .tnum{font-variant-numeric:tabular-nums}
 
 /* ---------- top bar ---------- */
+/* Opened from the home-screen app this page has no browser chrome, so it sits under the
+   iPhone camera cutout like any app screen. Same keep-out zone as the app itself. */
 .topbar{
   position:sticky; top:0; z-index:40; background:color-mix(in srgb, var(--ground) 88%, transparent);
   backdrop-filter:blur(10px); border-bottom:1px solid var(--line);
+  padding-top:max(0.5rem, calc(env(safe-area-inset-top) + 1.6rem));
 }
-.topbar .wrap{display:flex; align-items:center; gap:20px; min-height:52px; flex-wrap:wrap}
+.topbar .wrap{display:flex; align-items:center; gap:14px; min-height:52px; flex-wrap:wrap}
+.backlink{
+  display:inline-flex; align-items:center; gap:7px; white-space:nowrap; text-decoration:none;
+  font-family:var(--display); font-size:13px; font-weight:600; letter-spacing:.01em;
+  color:var(--brand-deep); background:var(--brand-wash);
+  border:1px solid color-mix(in srgb, var(--brand) 32%, transparent);
+  padding:7px 13px; border-radius:7px;
+}
+.backlink:hover{background:color-mix(in srgb, var(--brand) 18%, var(--brand-wash))}
 .topbar strong{font-family:var(--display); font-size:14px; letter-spacing:.01em; white-space:nowrap}
 .navlinks{display:flex; gap:16px; flex-wrap:wrap; margin-left:auto}
 .navlinks a{
@@ -272,6 +283,7 @@ footer p{max-width:52ch}
 
 <div class="topbar">
   <div class="wrap">
+    <a class="backlink" href="../index.html">&larr; Back to the app</a>
     <strong>GTW Job Builder</strong>
     <nav class="navlinks">
       <a href="#flow">The flow</a>
@@ -986,6 +998,9 @@ footer p{max-width:52ch}
 </section>
 
 <footer>
+  <div class="wrap" style="margin-bottom:26px">
+    <a class="backlink" href="../index.html">&larr; Back to the app</a>
+  </div>
   <div class="wrap">
     <p>
       <strong style="font-family:var(--display); color:var(--ink)">Stuck, or something's wrong?</strong><br>
